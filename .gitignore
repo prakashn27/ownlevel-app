@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+.turbo/
+.expo/
+coverage/
+.env
+.env.*
+!.env.example
+.DS_Store
+package-lock.json
+yarn.lock
