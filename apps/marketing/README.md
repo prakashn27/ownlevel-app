@@ -1,5 +1,7 @@
 # @ownlevel/marketing
 
+this page holds marketing page hosted in https://ownlevel.app
+
 Astro static site for ownlevel.app. No tenant data, no business logic; sign-up links to the app.
 
 - Locales: `en` (default, no prefix) and `fr-CA` (`/fr`). Translated: home + industry pages. Blog is English-only.
