@@ -1,0 +1,44 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../layouts/Base.astro";
+import { appUrl, useTranslations, industryUrl, home } from "../i18n/utils";
+import type { Locale } from "../i18n/ui";
+
+const { locale } = Astro.props as { locale: Locale };
+const t = useTranslations(locale);
+const industries = (await getCollection("industries")).filter((i) => i.data.locale === locale);
+---
+<Base
+  title={t("hero.title")}
+  description={t("hero.sub")}
+  alternates={{ en: home("en"), fr: home("fr") }}
+>
+  <section class="hero">
+    <h1>{t("hero.title")}</h1>
+    <p>{t("hero.sub")}</p>
+    <a class="btn" href={`${appUrl}/signup`}>{t("hero.cta")}</a>
+  </section>
+  <section>
+    <h2>{t("features.title")}</h2>
+    <div class="grid">
+      {[1, 2, 3].map((n) => (
+        <div class="card">
+          <h3>{t(`features.${n}.t` as "features.1.t")}</h3>
+          <p>{t(`features.${n}.b` as "features.1.b")}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+  <section style="margin-top:3rem">
+    <h2>{t("industries.title")}</h2>
+    <div class="grid">
+      {industries.map((i) => (
+        <a class="card" href={industryUrl(locale, i.data.slug)} style="text-decoration:none;color:inherit">
+          <h3>{i.data.title}</h3>
+          <p>{i.data.description}</p>
+          <span>{t("industries.learn")} →</span>
+        </a>
+      ))}
+    </div>
+  </section>
+</Base>

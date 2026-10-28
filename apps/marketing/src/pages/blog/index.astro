@@ -1,0 +1,9 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+const posts = (await getCollection("blog", (p) => !p.data.draft)).sort((a, b) => +b.data.date - +a.data.date);
+---
+<Base title="Blog" description="Guides and updates for agencies.">
+  <h1>Blog</h1>
+  <ul>{posts.map((p) => <li><a href={`/blog/${p.id}`}>{p.data.title}</a> <small>{p.data.date.toISOString().slice(0, 10)}</small></li>)}</ul>
+</Base>

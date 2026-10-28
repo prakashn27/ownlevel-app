@@ -1,0 +1,83 @@
+---
+import { getLocale, useTranslations, brand, appUrl, home, industriesIndex, blogIndex } from "../i18n/utils";
+import { hreflang, type Locale } from "../i18n/ui";
+
+interface Props {
+  title: string;
+  description: string;
+  /** Absolute-path URL of each available translation. Omit key if none exists. */
+  alternates?: Partial<Record<Locale, string>>;
+  type?: "website" | "article";
+  noindex?: boolean;
+}
+const { title, description, alternates, type = "website", noindex = false } = Astro.props;
+const locale = getLocale(Astro.url.pathname);
+const t = useTranslations(locale);
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const abs = (p: string) => new URL(p, Astro.site).href;
+const other: Locale = locale === "en" ? "fr" : "en";
+const fullTitle = `${title} | ${brand}`;
+const jsonLd = { "@context": "https://schema.org", "@type": "Organization", name: brand, url: Astro.site?.href, logo: abs("/logo.png") };
+---
+<!doctype html>
+<html lang={hreflang[locale]}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex" />}
+    {alternates && Object.entries(alternates).map(([l, p]) => (
+      <link rel="alternate" hreflang={hreflang[l as Locale]} href={abs(p)} />
+    ))}
+    {alternates?.en && <link rel="alternate" hreflang="x-default" href={abs(alternates.en)} />}
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content={type} />
+    <meta property="og:image" content={abs("/logo.png")} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={hreflang[locale].replace("-", "_")} />
+    <link rel="alternate" type="application/rss+xml" title={`${brand} blog`} href="/rss.xml" />
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    <style is:global>
+      :root { --fg:#111827; --muted:#6b7280; --accent:#4f46e5; --bg:#fff; --line:#e5e7eb; }
+      * { box-sizing: border-box; }
+      body { margin:0; font:16px/1.6 system-ui,sans-serif; color:var(--fg); background:var(--bg); }
+      a { color:var(--accent); }
+      .wrap { max-width:1040px; margin:0 auto; padding:0 1.25rem; }
+      header, footer { border-bottom:1px solid var(--line); padding:1rem 0; }
+      footer { border:0; border-top:1px solid var(--line); color:var(--muted); margin-top:4rem; }
+      nav { display:flex; gap:1.25rem; align-items:center; }
+      nav .brand { display:flex; align-items:center; gap:.5rem; font-weight:700; margin-right:auto; color:var(--fg); text-decoration:none; }
+      nav .brand img { border-radius:50%; }
+      .btn { background:var(--accent); color:#fff; padding:.6rem 1.1rem; border-radius:8px; text-decoration:none; display:inline-block; }
+      .hero { padding:5rem 0 3rem; } .hero h1 { font-size:2.75rem; line-height:1.15; max-width:18ch; margin:0 0 1rem; }
+      .grid { display:grid; gap:1.25rem; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); }
+      .card { border:1px solid var(--line); border-radius:12px; padding:1.25rem; }
+      .card h3 { margin-top:0; }
+      .prose { max-width:70ch; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav class="wrap">
+        <a class="brand" href={home(locale)}><img src="/logo-sm.png" srcset="/logo-sm.png 2x" width="32" height="32" alt="" />{brand}</a>
+        <a href={industriesIndex(locale)}>{t("nav.industries")}</a>
+        <a href={blogIndex()} hreflang="en">{t("nav.blog")}</a>
+        {alternates?.[other]
+          ? <a href={alternates[other]} hreflang={hreflang[other]} lang={hreflang[other]}>{t("lang.switch")}</a>
+          : null}
+        <a href={`${appUrl}/login`}>{t("nav.signin")}</a>
+        <a class="btn" href={`${appUrl}/signup`}>{t("nav.cta")}</a>
+      </nav>
+    </header>
+    <main class="wrap"><slot /></main>
+    <footer><div class="wrap">© {new Date().getFullYear()} {brand}. {t("footer.rights")}</div></footer>
+  </body>
+</html>

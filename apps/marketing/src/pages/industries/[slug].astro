@@ -1,0 +1,11 @@
+---
+import { getCollection } from "astro:content";
+import Industry from "../../components/Industry.astro";
+
+export async function getStaticPaths() {
+  const items = (await getCollection("industries")).filter((i) => i.data.locale === "en");
+  return items.map((entry) => ({ params: { slug: entry.data.slug }, props: { entry } }));
+}
+const { entry } = Astro.props;
+---
+<Industry entry={entry} locale="en" />
