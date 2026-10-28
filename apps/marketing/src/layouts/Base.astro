@@ -23,6 +23,7 @@ const jsonLd = { "@context": "https://schema.org", "@type": "Organization", name
 <html lang={hreflang[locale]}>
   <head>
     <meta charset="utf-8" />
+    <meta name="theme-color" content="#0F5132" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
@@ -46,20 +47,33 @@ const jsonLd = { "@context": "https://schema.org", "@type": "Organization", name
     <link rel="alternate" type="application/rss+xml" title={`${brand} blog`} href="/rss.xml" />
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
     <style is:global>
-      :root { --fg:#111827; --muted:#6b7280; --accent:#4f46e5; --bg:#fff; --line:#e5e7eb; }
+      :root {
+        --primary:#047857; --primary-deep:#0F5132; --accent:#A3E635; --accent-hover:#bef264;
+        --ink:#0B0F0E; --bg:#F7F8F7; --text:#4B5563; --line:#e1e5e2; --card:#fff;
+      }
       * { box-sizing: border-box; }
-      body { margin:0; font:16px/1.6 system-ui,sans-serif; color:var(--fg); background:var(--bg); }
-      a { color:var(--accent); }
+      body { margin:0; min-height:100vh; display:flex; flex-direction:column; font:16px/1.6 system-ui,sans-serif; color:var(--text); background:var(--bg); }
+      h1,h2,h3 { color:var(--ink); letter-spacing:-.02em; }
+      a { color:var(--primary); }
+      a:hover { color:var(--primary-deep); }
+      :focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
       .wrap { max-width:1040px; margin:0 auto; padding:0 1.25rem; }
-      header, footer { border-bottom:1px solid var(--line); padding:1rem 0; }
-      footer { border:0; border-top:1px solid var(--line); color:var(--muted); margin-top:4rem; }
+      header { border-bottom:1px solid var(--line); padding:1rem 0; background:var(--bg); }
+      main { flex:1; width:100%; }
+      footer { background:var(--ink); color:#9ca3af; margin-top:4rem; padding:2rem 0; }
       nav { display:flex; gap:1.25rem; align-items:center; }
-      nav .brand { display:flex; align-items:center; gap:.5rem; font-weight:700; margin-right:auto; color:var(--fg); text-decoration:none; }
+      nav a:not(.btn):not(.brand) { color:var(--text); text-decoration:none; }
+      nav a:not(.btn):not(.brand):hover { color:var(--primary); }
+      nav .brand { display:flex; align-items:center; gap:.5rem; font-weight:700; margin-right:auto; color:var(--ink); text-decoration:none; }
       nav .brand img { border-radius:50%; }
-      .btn { background:var(--accent); color:#fff; padding:.6rem 1.1rem; border-radius:8px; text-decoration:none; display:inline-block; }
-      .hero { padding:5rem 0 3rem; } .hero h1 { font-size:2.75rem; line-height:1.15; max-width:18ch; margin:0 0 1rem; }
+      .btn { background:var(--accent); color:var(--ink) !important; font-weight:600; padding:.6rem 1.1rem; border-radius:8px; text-decoration:none; display:inline-block; transition:background .15s; }
+      .btn:hover { background:var(--accent-hover); }
+      .hero { padding:5rem 0 3rem; } .hero h1 { font-size:2.75rem; line-height:1.15; max-width:18ch; margin:0 0 1rem; color:var(--primary-deep); }
+      .hero p { font-size:1.15rem; max-width:55ch; }
       .grid { display:grid; gap:1.25rem; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); }
-      .card { border:1px solid var(--line); border-radius:12px; padding:1.25rem; }
+      .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1.25rem; transition:border-color .15s, box-shadow .15s; }
+      a.card, a.card:hover { color:var(--text); }
+      a.card:hover { border-color:var(--primary); box-shadow:0 4px 16px rgba(4,120,87,.12); }
       .card h3 { margin-top:0; }
       .prose { max-width:70ch; }
     </style>
