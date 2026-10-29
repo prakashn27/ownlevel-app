@@ -2,10 +2,12 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ownlevel-marketing",
   "compatibility_date": "2025-01-01",
-  // Custom domains take precedence over the web Worker's `*.ownlevel.app/*` and `*/*` routes.
+  // Routes, not custom domains: the web Worker's `*/*` and `*.ownlevel.app/*` routes also match these hosts and
+  // routes beat custom domains, while the more specific patterns here beat the wildcards.
+  // Needs proxied (orange-cloud) DNS records for `@` and `www` in zone ownlevel.app (a dummy AAAA 100:: works).
   "routes": [
-    { "pattern": "ownlevel.app", "custom_domain": true },
-    { "pattern": "www.ownlevel.app", "custom_domain": true }
+    { "pattern": "ownlevel.app/*", "zone_name": "ownlevel.app" },
+    { "pattern": "www.ownlevel.app/*", "zone_name": "ownlevel.app" }
   ],
   "assets": {
     "directory": "./dist",
