@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/react";
+import { oneTimeTokenClient } from "better-auth/client/plugins";
 
-export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
-});
+// No baseURL: calls go to the current origin's /api/auth (proxied to the API), so every agency
+// host gets its own first-party session.
+export const authClient = createAuthClient({ plugins: [oneTimeTokenClient()] });

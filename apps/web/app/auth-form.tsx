@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { authClient } from "../lib/auth-client";
 
-export function AuthForm({ mode }: { mode: "login" | "signup" }) {
+export function AuthForm({ mode, allowSignup = true }: { mode: "login" | "signup"; allowSignup?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -26,7 +26,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   }
 
   return (
-    <>
+    <div className="narrow">
       <h1>{mode === "login" ? "Sign in" : "Create account"}</h1>
       <form onSubmit={onSubmit}>
         {mode === "signup" && <input name="name" placeholder="Name" required />}
@@ -35,9 +35,12 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         {error && <p className="error">{error}</p>}
         <button disabled={pending}>{mode === "login" ? "Sign in" : "Sign up"}</button>
       </form>
-      <p>
-        {mode === "login" ? <Link href="/signup">Create an account</Link> : <Link href="/login">Have an account? Sign in</Link>}
-      </p>
-    </>
+      {mode === "login" && <p><Link href="/forgot-password">Forgot password?</Link></p>}
+      {(allowSignup || mode === "signup") && (
+        <p>
+          {mode === "login" ? <Link href="/signup">Create an agency account</Link> : <Link href="/login">Have an account? Sign in</Link>}
+        </p>
+      )}
+    </div>
   );
 }

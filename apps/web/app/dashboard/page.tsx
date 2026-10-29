@@ -1,23 +1,15 @@
-"use client";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { authClient } from "../../lib/auth-client";
+import { PortalShell } from "../../components/portal-shell";
+import { getHostInfo } from "../../lib/server-api";
+import { PlatformDashboard } from "./platform-dashboard";
 
-export default function Dashboard() {
-  const router = useRouter();
-  const { data: session, isPending } = authClient.useSession();
-
-  useEffect(() => {
-    if (!isPending && !session) router.replace("/login");
-  }, [isPending, session, router]);
-
-  if (isPending || !session) return <p>Loading…</p>;
-
+export default async function Dashboard() {
+  const info = await getHostInfo();
+  if (info.kind === "unknown") return <div className="narrow"><p>Not found.</p></div>;
+  if (info.kind === "platform") return <PlatformDashboard />;
   return (
-    <>
-      <h1>Hello, {session.user.name}</h1>
-      <p>{session.user.email}</p>
-      <button onClick={() => authClient.signOut().then(() => router.push("/login"))}>Sign out</button>
-    </>
+    <PortalShell>
+      <h1>Welcome to {info.branding.appName ?? info.name}</h1>
+      <p>Your {(info.branding.clientLabel ?? "Client").toLowerCase()}s will appear here.</p>
+    </PortalShell>
   );
 }
