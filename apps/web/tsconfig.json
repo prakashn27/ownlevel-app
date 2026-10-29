@@ -4,6 +4,7 @@
     "lib": ["dom", "dom.iterable", "ES2022"],
     "jsx": "preserve",
     "noEmit": true,
+    "declaration": false,
     "allowJs": true,
     "incremental": true,
     "module": "ESNext",

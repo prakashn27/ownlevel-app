@@ -29,6 +29,8 @@ export function AuthForm({ mode, allowSignup = true }: { mode: "login" | "signup
         : await authClient.signIn.email({ email, password });
     setPending(false);
     if (res.error) return setError(res.error.message ?? tc("somethingWentWrong"));
+    // During an MCP authorization the server returns a redirect that continues the flow (the client follows it).
+    if (res.data && "redirect" in res.data && res.data.redirect) return;
     router.push("/dashboard");
   }
 

@@ -157,5 +157,25 @@
     "clientLabelQuestion": "What do you call your clients?",
     "clientLabelPlaceholder": "Client (e.g. Account, Location)",
     "preview": "Preview"
+  },
+  "oauth": {
+    "selectAgency": {
+      "title": "Choose an agency",
+      "description": "Which agency should this app connect to?",
+      "none": "You don’t have access to any agency.",
+      "continue": "Continue"
+    },
+    "consent": {
+      "title": "Authorize {app}",
+      "description": "<b>{app}</b> wants to act on your behalf with these permissions:",
+      "unknownApp": "An application",
+      "allow": "Allow",
+      "deny": "Deny",
+      "scope": {
+        "agency:settings": "Change your agency’s settings (for example, brand color)",
+        "offline_access": "Stay connected until you revoke access"
+      },
+      "unknownScope": "{scope}"
+    }
   }
 }
