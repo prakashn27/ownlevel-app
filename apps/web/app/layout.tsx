@@ -24,7 +24,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     : undefined) as CSSProperties | undefined;
   return (
     <html lang="en">
-      <body style={style}>
+      <body style={style} className={info.kind === "agency" ? undefined : "theme-ownlevel"}>
         {info.kind === "agency" && (
           <header className="brand">
             {info.branding.logoUrl && <img src={info.branding.logoUrl} alt="" height={28} />}
