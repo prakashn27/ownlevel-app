@@ -9,19 +9,21 @@ import {
   schema,
   sendEmail,
 } from "@ownlevel/core";
-import { db } from "./db/index.js";
+import { background, db } from "./db/index.js";
 import { transport, fromAddress } from "./email.js";
 import { env } from "./env.js";
 import { hostConfig } from "./host.js";
 
 async function sendReset(userId: string, to: string, token: string, request: Request | undefined) {
-  if (!request) return;
+  if (!request) return console.warn("reset email skipped: no request");
   // The API rewrites the URL to the browser-facing origin, so the link lands on the right host.
   const url = new URL(request.url);
   const resolved = await resolveHost(db, url.host, hostConfig);
-  if (!resolved) return;
+  if (!resolved) return console.warn(`reset email skipped: unknown host ${url.host}`);
   // On an agency host, only people with access there get a reset email.
-  if (resolved.kind === "agency" && !(await hasAgencyMembership(db, userId, resolved.agencyId))) return;
+  if (resolved.kind === "agency" && !(await hasAgencyMembership(db, userId, resolved.agencyId))) {
+    return console.warn(`reset email skipped: user has no membership on ${url.host}`);
+  }
   const appName = resolved.kind === "agency" ? (resolved.branding.appName ?? resolved.name) : "Ownlevel";
   const mail = resetPasswordEmail({ appName, url: `${url.origin}/reset-password?token=${token}` });
   const msg = { from: fromAddress(appName), to, ...mail };
@@ -50,7 +52,7 @@ export const auth = betterAuth({
     revokeSessionsOnPasswordReset: true,
     // Not awaited: response time must not reveal whether the email exists.
     sendResetPassword: async ({ user, token }, request) => {
-      void sendReset(user.id, user.email, token, request).catch((e) => console.error("reset email failed", e));
+      background(sendReset(user.id, user.email, token, request));
     },
   },
   // Hands a session from the platform host to a new agency host (sessions are host-bound).
