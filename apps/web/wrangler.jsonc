@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ownlevel-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "observability": { "enabled": true },
+
+  // Non-secret runtime config. PROXY_SHARED_SECRET is a secret: `wrangler secret put PROXY_SHARED_SECRET`.
+  "vars": {
+    "API_URL": "https://api.ownlevel.com"
+  },
+
+  // One Worker serves every hostname; the tenant is resolved from Host at request time.
+  "routes": [
+    // Platform host (agency-owner signup) — zone ownlevel.com
+    { "pattern": "app.ownlevel.com/*", "zone_name": "ownlevel.com" },
+    // Agency subdomains {slug}.ownlevel.app — needs a proxied wildcard DNS record `*` in zone ownlevel.app
+    { "pattern": "*.ownlevel.app/*", "zone_name": "ownlevel.app" },
+    // Custom agency domains arrive through Cloudflare for SaaS (fallback origin in zone ownlevel.app).
+    // Verify against Cloudflare's "Workers as origin for custom hostnames" docs before relying on this.
+    { "pattern": "*/*", "zone_name": "ownlevel.app" }
+  ],
+
+  // Local preview: no routes, so wrangler dev keeps the real Host header (it otherwise rewrites
+  // Host to the first route's hostname, which would break host-based tenant resolution).
+  "env": {
+    "preview": {
+      "routes": [],
+      "vars": { "API_URL": "http://localhost:4000" }
+    }
+  }
+}

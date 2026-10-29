@@ -1,0 +1,3 @@
+# Used by `pnpm cf:preview` (local Workers runtime). Never commit .dev.vars.
+API_URL=http://localhost:4000
+PROXY_SHARED_SECRET=dev-proxy-secret-change-me
