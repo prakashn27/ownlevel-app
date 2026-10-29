@@ -16,6 +16,9 @@
     "test": "tsx --env-file-if-exists=.env --test test/*.test.ts"
   },
   "dependencies": {
+    "@better-auth/cimd": "1.7.14",
+    "@better-auth/mcp": "1.7.14",
+    "@better-auth/oauth-provider": "1.7.14",
     "@hono/node-server": "^1.19.17",
     "@ownlevel/core": "workspace:*",
     "@ownlevel/tenancy": "workspace:*",

@@ -36,6 +36,13 @@
       "when": 1793293362677,
       "tag": "0004_client_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793304866334,
+      "tag": "0005_oauth_provider",
+      "breakpoints": true
     }
   ]
 }

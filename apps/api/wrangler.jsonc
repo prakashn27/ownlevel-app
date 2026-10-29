@@ -13,7 +13,12 @@
 
   // Secrets (wrangler secret put): BETTER_AUTH_SECRET, PROXY_SHARED_SECRET, RESEND_API_KEY
   "vars": {
-    "BETTER_AUTH_URL": "https://api.ownlevel.app",
+    // The platform origin, not api.*: the OAuth authorization server for MCP must share the browser's session
+    // cookie, which only exists on hosts served by the web Worker (it proxies /api/* and /.well-known/*).
+    "BETTER_AUTH_URL": "https://app.ownlevel.app",
+    "MCP_PUBLIC_URL": "https://mcp.ownlevel.app/mcp",
+    // CIMD needs Node networking (DNS pinning); on Workers run the API on Node or accept no client registration.
+    "OAUTH_CIMD": "0",
     "PLATFORM_ROOT_DOMAIN": "ownlevel.app",
     "PLATFORM_HOSTS": "app.ownlevel.app",
     "WEB_ORIGINS": "",

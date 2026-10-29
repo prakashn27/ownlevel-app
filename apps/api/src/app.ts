@@ -8,6 +8,7 @@ import {
   createInvitation,
   getClient,
   getTeam,
+  hasAgencyMembership,
   inviteEmail,
   isSlugAvailable,
   listAgencyMemberships,
@@ -15,11 +16,13 @@ import {
   previewInvitation,
   resolveHost,
   revokeInvitation,
+  session as sessionTable,
   sendEmail,
   updateBranding,
   updateClient,
 } from "@ownlevel/core";
 import { parseHost } from "@ownlevel/tenancy";
+import { eq } from "drizzle-orm";
 import { auth } from "./auth.js";
 import { db } from "./db/index.js";
 import { fromAddress, transport } from "./email.js";
@@ -57,12 +60,26 @@ app.on(["GET", "POST"], "/api/auth/*", (c) => {
   return auth.handler(new Request(new URL(u.pathname + u.search, origin), c.req.raw));
 });
 
+// OAuth discovery (RFC 8414 / OIDC) lives at the server root, outside /api/auth.
+app.on(["GET", "HEAD"], "/.well-known/*", (c) => auth.handler(c.req.raw));
+
 // Resolve session from cookie for the remaining routes.
 app.use("/api/*", async (c, next) => {
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
   c.set("user", session?.user ?? null);
   c.set("session", session?.session ?? null);
   await next();
+});
+
+/** MCP authorization: the user picks which agency the connection acts on (agency-level memberships only). */
+app.post("/api/oauth/select-agency", async (c) => {
+  const user = c.get("user");
+  const session = c.get("session");
+  if (!user || !session) return c.json({ error: "unauthorized" }, 401);
+  const { agencyId } = (await c.req.json().catch(() => ({}))) as { agencyId?: unknown };
+  if (typeof agencyId !== "string" || !(await hasAgencyMembership(db, user.id, agencyId))) throw new DomainError("not_found", "Agency not found.");
+  await db.update(sessionTable).set({ oauthAgencyId: agencyId, oauthAgencyAt: new Date() }).where(eq(sessionTable.id, session.id));
+  return c.json({ ok: true });
 });
 
 app.onError((err, c) => {

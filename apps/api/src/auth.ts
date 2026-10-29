@@ -1,6 +1,8 @@
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { oneTimeToken } from "better-auth/plugins/one-time-token";
+import { jwt } from "better-auth/plugins/jwt";
+import { mcp } from "@better-auth/mcp";
 import {
   hasAgencyMembership,
   isKnownHost,
@@ -13,6 +15,19 @@ import { background, db } from "./db/index.js";
 import { transport, fromAddress } from "./email.js";
 import { env } from "./env.js";
 import { hostConfig } from "./host.js";
+
+/** Scopes an MCP connection can be granted. Mirrors the `scope` of tools in packages/ai/tools. */
+export const OAUTH_SCOPES = ["agency:settings", "offline_access"] as const;
+
+const SELECTION_TTL_MS = 5 * 60 * 1000;
+
+/** The agency picked for the authorization in progress. Short-lived so a stale pick is never reused. */
+function selectedAgencyId(session: Record<string, unknown>): string | undefined {
+  const id = session.oauthAgencyId;
+  const at = session.oauthAgencyAt;
+  if (typeof id !== "string" || !(at instanceof Date || typeof at === "string")) return undefined;
+  return Date.now() - new Date(at).getTime() <= SELECTION_TTL_MS ? id : undefined;
+}
 
 async function sendReset(userId: string, to: string, token: string, request: Request | undefined) {
   if (!request) return console.warn("reset email skipped: no request");
@@ -30,6 +45,19 @@ async function sendReset(userId: string, to: string, token: string, request: Req
   if (resolved.kind === "agency") await sendEmail(db, transport, { agencyId: resolved.agencyId }, msg);
   else await transport(msg);
 }
+
+/** CIMD needs node:dns / node:https to pin DNS answers (SSRF guard), so it loads only where those exist. */
+async function cimdPlugins() {
+  if (!env.oauthCimd) return [];
+  try {
+    const [{ cimd }, { fetchClientMetadataResource }] = await Promise.all([import("@better-auth/cimd"), import("@better-auth/cimd/node")]);
+    return [cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" })];
+  } catch (e) {
+    console.warn("CIMD disabled: runtime lacks Node networking (set OAUTH_CIMD=0 to silence)", e);
+    return [];
+  }
+}
+const cimdPlugin = await cimdPlugins();
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg", schema }),
@@ -55,6 +83,42 @@ export const auth = betterAuth({
       background(sendReset(user.id, user.email, token, request));
     },
   },
-  // Hands a session from the platform host to a new agency host (sessions are host-bound).
-  plugins: [oneTimeToken({ expiresIn: 3 })],
+  // Set by /api/oauth/select-agency while an MCP authorization is in progress; read as the consent reference.
+  session: {
+    additionalFields: {
+      oauthAgencyId: { type: "string", required: false, input: false },
+      oauthAgencyAt: { type: "date", required: false, input: false },
+    },
+  },
+  // The JWT plugin's own /token is replaced by the OAuth provider's /oauth2/token.
+  disabledPaths: ["/token"],
+  plugins: [
+    // Hands a session from the platform host to a new agency host (sessions are host-bound).
+    oneTimeToken({ expiresIn: 3 }),
+    jwt(),
+    // OAuth 2.1 authorization server for MCP clients. Login, agency picker and consent live in apps/web.
+    mcp({
+      resource: env.mcpUrl,
+      loginPage: `${env.webUrl}/login`,
+      consentPage: `${env.webUrl}/oauth/consent`,
+      scopes: [...OAUTH_SCOPES],
+      grantTypes: ["authorization_code", "refresh_token"],
+      accessTokenExpiresIn: 600,
+      allowDynamicClientRegistration: env.oauthOpenRegistration,
+      allowUnauthenticatedClientRegistration: env.oauthOpenRegistration,
+      clientRegistrationAllowedScopes: [...OAUTH_SCOPES],
+      // The user picks which agency this connection acts on; consent is stored per agency.
+      postLogin: {
+        page: `${env.webUrl}/oauth/select-agency`,
+        shouldRedirect: ({ session, isContinuation }) => (isContinuation ? !selectedAgencyId(session) : true),
+        consentReferenceId: ({ session }) => {
+          const id = selectedAgencyId(session);
+          if (!id) throw new Error("no agency selected");
+          return id;
+        },
+      },
+      customAccessTokenClaims: ({ referenceId }) => (referenceId ? { agency_id: referenceId } : {}),
+    }),
+    ...cimdPlugin,
+  ],
 });
