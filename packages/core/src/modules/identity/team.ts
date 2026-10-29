@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import {
   agencies,
+  clients,
   invitations,
   memberships,
   roles,
@@ -16,11 +17,25 @@ import { DomainError } from "../../errors.js";
 export const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
 const INVITE_TTL_MS = 7 * 24 * 3600 * 1000;
 const INVITABLE = ["agency_admin", "agency_user"] as const;
+const INVITABLE_CLIENT = ["client_admin", "client_user"] as const;
+
+/** NULL-aware match: agency-level rows have no client. */
+const forClient = (col: typeof memberships.clientId | typeof invitations.clientId, clientId?: string) => (clientId ? eq(col, clientId) : isNull(col));
 
 type Scope = { userId: string; agencyId: string };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The client must exist in the agency in scope (RLS already hides other agencies' clients). */
+export async function assertClient(tx: Tx, agencyId: string, clientId: string) {
+  if (!UUID.test(clientId)) throw new DomainError("not_found", "Client not found.");
+  const [c] = await tx.select({ id: clients.id, status: clients.status }).from(clients).where(and(eq(clients.id, clientId), eq(clients.agencyId, agencyId)));
+  if (!c) throw new DomainError("not_found", "Client not found.");
+  return c;
+}
+
 /** Agency-level membership check inside a tenant transaction. Throws forbidden unless the user holds one of `allowed` roles. */
-async function requireRole(tx: Tx, userId: string, agencyId: string, allowed: string[]) {
+export async function requireRole(tx: Tx, userId: string, agencyId: string, allowed: string[]) {
   const [m] = await tx
     .select({ role: roles.key })
     .from(memberships)
@@ -83,15 +98,16 @@ export async function updateBranding(db: Db, ctx: { userId: string; agencyId: st
 }
 
 // ── Team + invitations ──
-export const getTeam = (db: Db, ctx: Scope) =>
+export const getTeam = (db: Db, ctx: Scope, clientId?: string) =>
   withTenant(db, ctx, async (tx) => {
   await requireRole(tx, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin", "agency_user"]);
+  if (clientId) await assertClient(tx, ctx.agencyId, clientId);
   const members = await tx
     .select({ userId: user.id, name: user.name, email: user.email, role: roles.key, roleName: roles.name })
     .from(memberships)
     .innerJoin(user, eq(user.id, memberships.userId))
     .innerJoin(roles, eq(roles.id, memberships.roleId))
-    .where(and(eq(memberships.agencyId, ctx.agencyId), isNull(memberships.clientId)));
+    .where(and(eq(memberships.agencyId, ctx.agencyId), forClient(memberships.clientId, clientId)));
   const pending = await tx
     .select({ id: invitations.id, email: invitations.email, role: roles.key, roleName: roles.name, expiresAt: invitations.expiresAt })
     .from(invitations)
@@ -99,7 +115,7 @@ export const getTeam = (db: Db, ctx: Scope) =>
     .where(
       and(
         eq(invitations.agencyId, ctx.agencyId),
-        isNull(invitations.clientId),
+        forClient(invitations.clientId, clientId),
         isNull(invitations.acceptedAt),
         isNull(invitations.revokedAt),
         gt(invitations.expiresAt, new Date()),
@@ -109,14 +125,17 @@ export const getTeam = (db: Db, ctx: Scope) =>
   return { members, pending };
   });
 
-export async function createInvitation(db: Db, ctx: Scope, input: { email: string; roleKey: string }) {
+export async function createInvitation(db: Db, ctx: Scope, input: { email: string; roleKey: string; clientId?: string }) {
   const email = input.email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new DomainError("invalid_input", "Enter a valid email address.");
-  if (!(INVITABLE as readonly string[]).includes(input.roleKey)) throw new DomainError("invalid_input", "Invalid role.");
+  if (!((input.clientId ? INVITABLE_CLIENT : INVITABLE) as readonly string[]).includes(input.roleKey)) throw new DomainError("invalid_input", "Invalid role.");
   const token = randomBytes(32).toString("base64url");
   return withTenant(db, ctx, async (tx) => {
   const inviterRole = await requireRole(tx, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin"]);
-  if (inviterRole === "agency_admin" && input.roleKey !== "agency_user")
+  if (input.clientId) {
+    const c = await assertClient(tx, ctx.agencyId, input.clientId);
+    if (c.status !== "active") throw new DomainError("invalid_input", "This client is archived. Restore it before inviting people.");
+  } else if (inviterRole === "agency_admin" && input.roleKey !== "agency_user")
     throw new DomainError("forbidden", "Admins can only invite roles below their own.");
 
   const [role] = await tx.select().from(roles).where(and(isNull(roles.agencyId), eq(roles.key, input.roleKey)));
@@ -126,16 +145,17 @@ export async function createInvitation(db: Db, ctx: Scope, input: { email: strin
     .select({ id: memberships.id })
     .from(memberships)
     .innerJoin(user, eq(user.id, memberships.userId))
-    .where(and(eq(memberships.agencyId, ctx.agencyId), isNull(memberships.clientId), sql`lower(${user.email}) = ${email}`));
-  if (existing) throw new DomainError("invalid_input", "That person is already on your team.");
+    .where(and(eq(memberships.agencyId, ctx.agencyId), forClient(memberships.clientId, input.clientId), sql`lower(${user.email}) = ${email}`));
+  if (existing) throw new DomainError("invalid_input", input.clientId ? "That person already has access to this client." : "That person is already on your team.");
 
   {
     await tx
       .update(invitations)
       .set({ revokedAt: new Date() })
-      .where(and(eq(invitations.agencyId, ctx.agencyId), eq(invitations.email, email), isNull(invitations.clientId), isNull(invitations.acceptedAt), isNull(invitations.revokedAt)));
+      .where(and(eq(invitations.agencyId, ctx.agencyId), eq(invitations.email, email), forClient(invitations.clientId, input.clientId), isNull(invitations.acceptedAt), isNull(invitations.revokedAt)));
     await tx.insert(invitations).values({
       agencyId: ctx.agencyId,
+      clientId: input.clientId,
       email,
       roleId: role.id,
       tokenHash: hashToken(token),

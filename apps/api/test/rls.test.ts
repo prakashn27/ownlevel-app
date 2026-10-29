@@ -7,6 +7,11 @@ import {
   agencyDomains,
   clients,
   createAgency,
+  createClient,
+  createInvitation,
+  getTeam,
+  listClients,
+  updateClient,
   invitations,
   isSlugAvailable,
   listAgencyMemberships,
@@ -158,5 +163,100 @@ describe("RLS on tenancy tables", () => {
       const r = await tx.execute(sql`select rolsuper, rolbypassrls from pg_roles where rolname = current_user`);
       assert.deepEqual(r.rows[0], { rolsuper: false, rolbypassrls: false });
     });
+  });
+});
+
+describe("client-level scoping", () => {
+  let c1: string;
+  let c2: string;
+  const uC = `rls-c-${run}`;
+
+  before(async () => {
+    await db.insert(user).values({ id: uC, name: uC, email: `${uC}@test.local` });
+    c1 = (await createClient(db, { userId: uA, agencyId: A.id }, { name: "C1" })).id;
+    c2 = (await createClient(db, { userId: uA, agencyId: A.id }, { name: "C2" })).id;
+    await createInvitation(db, { userId: uA, agencyId: A.id }, { email: `c1-${run}@test.local`, roleKey: "client_user", clientId: c1 });
+    await createInvitation(db, { userId: uA, agencyId: A.id }, { email: `c2-${run}@test.local`, roleKey: "client_user", clientId: c2 });
+    await createInvitation(db, { userId: uA, agencyId: A.id }, { email: `agency-${run}@test.local`, roleKey: "agency_user" });
+    const [role] = await db.select().from(roles).where(sql`agency_id is null and key = 'client_user'`);
+    for (const clientId of [c1, c2])
+      await withTenant(db, { agencyId: A.id }, (tx) => tx.insert(memberships).values({ userId: uC, agencyId: A.id, clientId, roleId: role!.id }));
+  });
+
+  after(async () => {
+    await db.execute(sql`delete from "user" where id = ${uC}`);
+  });
+
+  it("client context sees only that client's invitations and memberships", async () => {
+    await withTenant(db, { agencyId: A.id, clientId: c1 }, async (tx) => {
+      const inv = await tx.select().from(invitations);
+      assert.deepEqual(inv.map((i) => i.email), [`c1-${run}@test.local`]);
+      assert.ok((await tx.select().from(memberships)).every((m) => m.clientId === c1));
+    });
+  });
+
+  it("agency context still sees every client's rows", async () => {
+    await withTenant(db, { agencyId: A.id }, async (tx) => {
+      assert.equal((await tx.select().from(invitations)).length, 3);
+      assert.ok((await tx.select().from(memberships)).some((m) => m.clientId === c2));
+    });
+  });
+
+  it("client context cannot write rows for another client or the agency level", async () => {
+    const [role] = await db.select().from(roles).where(sql`agency_id is null and key = 'client_user'`);
+    const row = { agencyId: A.id, roleId: role!.id, tokenHash: `h-${randomUUID()}`, invitedBy: uA, expiresAt: new Date(Date.now() + 1e6) };
+    await assert.rejects(
+      withTenant(db, { agencyId: A.id, clientId: c1 }, (tx) => tx.insert(invitations).values({ ...row, email: "x@test.local", clientId: c2 })),
+      denied,
+    );
+    await assert.rejects(
+      withTenant(db, { agencyId: A.id, clientId: c1 }, (tx) => tx.insert(invitations).values({ ...row, email: "y@test.local", tokenHash: `h-${randomUUID()}` })),
+      denied,
+    );
+  });
+
+  it("a person still sees their own memberships across clients", async () => {
+    await withTenant(db, { userId: uC }, async (tx) => assert.equal((await tx.select().from(memberships)).length, 2));
+  });
+
+  it("team listing is split between agency and client", async () => {
+    const ctx = { userId: uA, agencyId: A.id };
+    assert.deepEqual((await getTeam(db, ctx, c1)).pending.map((p) => p.email), [`c1-${run}@test.local`]);
+    assert.deepEqual((await getTeam(db, ctx)).pending.map((p) => p.email), [`agency-${run}@test.local`]);
+    assert.equal((await getTeam(db, ctx, c1)).members.length, 1);
+  });
+
+  it("other agencies cannot see or invite into this client", async () => {
+    const ctxB = { userId: uB, agencyId: B.id };
+    await assert.rejects(getTeam(db, ctxB, c1), { code: "not_found" });
+    await assert.rejects(createInvitation(db, ctxB, { email: "z@test.local", roleKey: "client_user", clientId: c1 }), { code: "not_found" });
+    assert.deepEqual((await listClients(db, ctxB)).map((c) => c.name), ["B client"]);
+  });
+
+  it("client roles are only valid on client invites and vice versa", async () => {
+    const ctx = { userId: uA, agencyId: A.id };
+    await assert.rejects(createInvitation(db, ctx, { email: "q@test.local", roleKey: "agency_user", clientId: c1 }), { code: "invalid_input" });
+    await assert.rejects(createInvitation(db, ctx, { email: "q@test.local", roleKey: "client_user" }), { code: "invalid_input" });
+  });
+
+  it("only owners and admins create clients; input is validated", async () => {
+    await assert.rejects(createClient(db, { userId: uC, agencyId: A.id }, { name: "nope" }), { code: "forbidden" });
+    await assert.rejects(createClient(db, { userId: uA, agencyId: A.id }, { name: "  " }), { code: "invalid_input" });
+    await assert.rejects(createClient(db, { userId: uA, agencyId: A.id }, { name: "x", timezone: "Mars/Base" }), { code: "invalid_input" });
+    await assert.rejects(createClient(db, { userId: uA, agencyId: A.id }, { name: "x", currency: "dollars" }), { code: "invalid_input" });
+    await assert.rejects(getTeam(db, { userId: uA, agencyId: A.id }, "not-a-uuid"), { code: "not_found" });
+  });
+
+  it("clients can be edited and archived; archived clients take no invites", async () => {
+    const ctx = { userId: uA, agencyId: A.id };
+    const c = await createClient(db, ctx, { name: "Edit me" });
+    assert.equal(c.timezone, "UTC"); // agency default
+    const u = await updateClient(db, ctx, c.id, { name: "Edited", timezone: "Europe/Berlin", currency: "eur" });
+    assert.deepEqual([u.name, u.timezone, u.currency], ["Edited", "Europe/Berlin", "EUR"]);
+    await updateClient(db, ctx, c.id, { status: "archived" });
+    await assert.rejects(createInvitation(db, ctx, { email: "arch@test.local", roleKey: "client_user", clientId: c.id }), { code: "invalid_input" });
+    await assert.rejects(updateClient(db, ctx, c.id, { status: "deleted" }), { code: "invalid_input" });
+    await assert.rejects(updateClient(db, { userId: uC, agencyId: A.id }, c.id, { name: "x" }), { code: "forbidden" });
+    await assert.rejects(updateClient(db, { userId: uB, agencyId: B.id }, c.id, { name: "x" }), { code: "not_found" });
   });
 });
