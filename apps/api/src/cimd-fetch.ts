@@ -21,7 +21,9 @@ function assertPublicHttps(url: URL) {
 }
 
 export const fetchClientMetadataResource = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-  const req = new Request(input, init);
+  // The library passes redirect: "error", which Workers' Request rejects (only follow | manual). We force manual below.
+  const { redirect: _redirect, ...rest } = init ?? {};
+  const req = new Request(input, rest);
   if (req.method !== "GET" && req.method !== "HEAD") throw new TypeError("only GET and HEAD are supported");
   assertPublicHttps(new URL(req.url));
 
