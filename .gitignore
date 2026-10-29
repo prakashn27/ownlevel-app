@@ -13,3 +13,6 @@ yarn.lock
 .astro/
 agent_docs/
 .wrangler/
+
+*.tsbuildinfo
+next-env.d.ts
