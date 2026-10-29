@@ -212,7 +212,7 @@ Do not delete the DNS records afterwards. If the TXT or CNAME disappears, the do
 **One-time setup**
 
 1. Reserve `domains.ownlevel.app` as the CNAME target. Point it at the Cloudflare for SaaS fallback origin; Cloudflare issues and renews certificates for each registered custom hostname.
-2. Register a hostname with Cloudflare (Custom Hostnames API) only after our own TXT verification succeeds, and store the returned id in `agency_domains.cf_hostname_id`. Cloudflare only serves hostnames registered this way, so unverified domains never get a certificate or traffic. (With Caddy on-demand TLS instead, gate issuance with `GET /internal/domains/allowed?host=...`.)
+2. Register a hostname with Cloudflare (Custom Hostnames API) only after our own TXT verification succeeds, and store the returned id in `agency_domains.cf_hostname_id`. Cloudflare only serves hostnames registered this way, so unverified domains never get a certificate or traffic.
 3. Add a hostname resolver in `packages/tenancy` (Host → `agency_id`, cached in Redis, invalidated on any domain status change). Trust `Host` only from the known proxy and ignore `X-Forwarded-Host` otherwise.
 4. Add a `domain.verify` worker job and a scheduled re-verification job.
 5. Add the endpoints to the OpenAPI spec and regenerate `packages/sdk`: `GET /domains`, `POST /domains`, `POST /domains/:id/verify`, `POST /domains/:id/primary`, `DELETE /domains/:id`.

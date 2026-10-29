@@ -29,6 +29,6 @@ export const env = {
       : `https://${list(process.env.PLATFORM_HOSTS ?? "localhost")[0]}`),
   /** Dynamic client registration (RFC 7591): anyone can create an OAuth client. Dev convenience only; off unless set to 1. */
   oauthOpenRegistration: process.env.OAUTH_OPEN_REGISTRATION === "1",
-  /** Client ID Metadata Documents: clients are identified by an HTTPS URL we fetch (SSRF-guarded; needs Node, not Workers). */
+  /** Client ID Metadata Documents: clients are identified by an https URL we fetch (see cimd-fetch.ts). On unless OAUTH_CIMD=0. */
   oauthCimd: process.env.OAUTH_CIMD !== "0",
 };

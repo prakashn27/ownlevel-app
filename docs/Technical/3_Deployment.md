@@ -1,194 +1,124 @@
 # Ownlevel — Deployment & Traffic Routing
 
-Status: draft · Related: [2_Authentication.md](./2_Authentication.md) (hostnames, custom domains, sessions)
+Status: draft · Related: [2_Authentication.md](./2_Authentication.md) (hostnames, custom domains, sessions), [4_MCP.md](./4_MCP.md)
 
 ## Overview
 
-Ownlevel starts on one machine and grows to several without architectural change. The app tier is stateless: sessions and permission caches live in Redis, tenant identity comes from the `Host` header, and agents and automations run in workers fed by events. Any app instance can serve any request.
+Everything runs on Cloudflare Workers. There are no servers, containers or reverse proxies to operate. Tenant identity comes from the `Host` header, so any Worker instance can serve any request.
 
-| Component | Role | Stateful? |
-| --- | --- | --- |
-| Edge / reverse proxy | TLS, hostname routing, forwards to the app | No (holds certificates) |
-| API / web (`apps/*`) | HTTP adapters that call `packages/core` | No |
-| Workers | Events, agents, automations, domain verification | No |
-| Postgres | System of record, RLS | Yes |
-| Redis | Sessions, permission cache, hostname cache, queues | Yes |
+| Component | Where | Route | Config |
+| --- | --- | --- | --- |
+| Web (`apps/web`, Next.js via `@opennextjs/cloudflare`) | Worker `ownlevel-web` | `app.ownlevel.app`, `*.ownlevel.app`, custom agency domains | `apps/web/wrangler.jsonc` |
+| API (`apps/api`, Hono + Better Auth) | Worker `ownlevel-api` | `api.ownlevel.app` | `apps/api/wrangler.jsonc` |
+| MCP server (`apps/mcp-server`) | Worker `ownlevel-mcp` | `mcp.ownlevel.app` | `apps/mcp-server/wrangler.jsonc` |
+| Postgres (system of record, RLS) | Managed Postgres reached through Hyperdrive | | Hyperdrive config `ownlevel-db` |
 
-A load balancer is **not needed on a single server**. A reverse proxy is always needed, to terminate TLS and route by hostname.
-
-## Shared setup (both scenarios)
-
-### DNS and certificates
-
-Every agency gets `{slug}.ownlevel.app` and may add custom domains (see the Authentication doc).
-
-| Hostname | DNS | Certificate |
-| --- | --- | --- |
-| `app.ownlevel.app` | Proxied record in the `ownlevel.app` zone, served by the web Worker | Universal SSL (covered by `*.ownlevel.app`) |
-| `api.ownlevel.app` | **DNS-only** A record to the API host (Caddy terminates TLS) | Caddy / Let's Encrypt |
-| `*.ownlevel.app` | Proxied wildcard `*` record in the `ownlevel.app` zone, served by the web Worker | Cloudflare Universal SSL covers `*.ownlevel.app` (one label), so flat slugs need no extra certificate |
-| `app.youragency.com` (custom) | Agency CNAME to `domains.ownlevel.app` | Cloudflare for SaaS Custom Hostnames (registered by the domain worker after TXT verification) |
-
-### Application rules that make scaling safe
-
-- Sessions, the permission cache and the hostname resolver cache live in Redis, never in process memory. Revocation must take effect on every instance at once.
-- The app trusts `Host` and `X-Forwarded-For` only from the edge's IPs. Ignore `X-Forwarded-Host` otherwise.
-- Scheduled jobs (domain re-verification every 6 hours, session cleanup) run once per cluster: use a single scheduler or a Redis lock.
-- Migrations run as a single one-off job per release, never at app start on every instance.
-- Workers and web scale independently. Workers never run on the request path.
-- Secrets (database URL, Redis URL, encryption keys, Cloudflare tokens) come from environment or a secret store, not from the image.
-
-## Web on Cloudflare Workers
-
-The Next.js app (`apps/web`) runs as one Worker, built with `@opennextjs/cloudflare`, for every hostname: the platform host, `{slug}.ownlevel.app` and agencies' custom domains. The API and MCP stay on our own servers behind Caddy.
+The API and MCP Workers connect as a non-owner database role (not superuser, no `BYPASSRLS`), so RLS always applies. Each request opens its own short-lived pool; Hyperdrive does the real pooling.
 
 ```mermaid
 flowchart LR
-  B[Browser on any agency host] --> W[Cloudflare Worker: apps/web]
-  W -->|"/api/*  + X-Forwarded-Host + secret"| API[api.ownlevel.app via Caddy]
-  W -->|everything else| N[Next.js pages]
+  B[Browser / agency host] --> W["web Worker<br/>app.ownlevel.app, *.ownlevel.app"]
+  W -->|"/api/*, /.well-known/* + proxy secret"| A["API Worker<br/>api.ownlevel.app"]
+  C[MCP client] -->|"/mcp, Bearer JWT"| M["MCP Worker<br/>mcp.ownlevel.app"]
+  C -->|"OAuth: authorize, token, register"| W
+  M -->|JWKS| A
+  A --> H[Hyperdrive]
+  M --> H
+  H --> PG[(Postgres)]
 ```
 
-- **Same-origin proxy.** The browser only talks to its own host; `app/api/[...path]/route.ts` forwards `/api/*` to `API_URL`, adding `X-Forwarded-Host` and `X-Ownlevel-Proxy: <secret>`. Cookies stay first-party and host-only, and there is no CORS.
-- **Trust.** The API honours `X-Forwarded-Host` only when the secret matches (`PROXY_SHARED_SECRET`, identical on the Worker and the API). Better-auth's origin check accepts an origin only if its host resolves to the platform or an active agency domain.
+## DNS and certificates
+
+Every agency gets `{slug}.ownlevel.app` and may add custom domains (see the Authentication doc). All records are proxied (orange cloud) in the single zone `ownlevel.app`; the Worker routes answer before any origin is contacted, so records for hosts with a Worker route can point at a dummy address (`100::` or `192.0.2.1`).
+
+| Hostname | Served by | Certificate |
+| --- | --- | --- |
+| `app.ownlevel.app` | web Worker | Universal SSL (covered by `*.ownlevel.app`) |
+| `*.ownlevel.app` (agency slugs) | web Worker | Universal SSL covers one label, so flat slugs need no extra certificate |
+| `api.ownlevel.app` | API Worker | Universal SSL |
+| `mcp.ownlevel.app` | MCP Worker | Universal SSL |
+| `app.youragency.com` (custom) | web Worker, via CNAME to `domains.ownlevel.app` | Cloudflare for SaaS Custom Hostnames (registered by the domain worker after TXT verification) |
+
+**Route precedence.** The web Worker's `*.ownlevel.app/*` route also matches `api.` and `mcp.`. The API and MCP Workers use routes (not custom domains) with more specific patterns (`api.ownlevel.app/*`, `mcp.ownlevel.app/*`), and Cloudflare picks the most specific route. Do not turn them into custom domains: routes beat custom domains, so the wildcard would win. Every one of these hosts needs a proxied DNS record, otherwise the route never runs.
+
+## Application rules
+
+- State never lives in Worker memory. Sessions, OAuth grants and signing keys are in Postgres; an isolate can be recycled at any time.
+- The API honours `X-Forwarded-Host` only when `X-Ownlevel-Proxy` carries the shared secret (`PROXY_SHARED_SECRET`, identical on the web and API Workers). Otherwise the `Host` header wins.
+- Scheduled jobs (domain re-verification every 6 hours, session cleanup) run as Cron Triggers so each runs once.
+- Migrations run as a single one-off job per release (`pnpm --filter @ownlevel/api db:migrate`), never at Worker start.
+- Secrets are Worker secrets (`wrangler secret put`), never in `wrangler.jsonc` `vars` or the repo.
+
+## Web Worker
+
+The Next.js app runs as one Worker for every hostname: the platform host, `{slug}.ownlevel.app` and agencies' custom domains.
+
+- **Same-origin proxy.** The browser only talks to its own host. `app/api/[...path]/route.ts` and `app/.well-known/[...path]/route.ts` forward `/api/*` and `/.well-known/*` to `API_URL`, adding `X-Forwarded-Host` and `X-Ownlevel-Proxy: <secret>` (shared code in `lib/api-proxy.ts`). Cookies stay first-party and host-only, and there is no CORS.
+- **Trust.** Better Auth's origin check accepts an origin only if its host resolves to the platform or an active agency domain.
 - **Config.** `apps/web/wrangler.jsonc` holds routes and `API_URL`; `PROXY_SHARED_SECRET` is a Worker secret. `NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN` is a build-time variable.
+- **Why OAuth lives on `app.ownlevel.app`.** The login session cookie is host-only on the web hosts, so the MCP authorization server must be served from there (through the proxy above) to see it. See [4_MCP.md](./4_MCP.md#production).
 
-**Deploy runbook**
+## API Worker
 
-1. In Cloudflare, create the single zone `ownlevel.app` (platform `app`, `api`, `mcp`, agency slugs, SaaS fallback).
-2. API host env: `PLATFORM_ROOT_DOMAIN=ownlevel.app`, `PLATFORM_HOSTS=app.ownlevel.app`, `PROXY_SHARED_SECRET`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://app.ownlevel.app` (the platform origin, see [4_MCP.md](./4_MCP.md#production)), `MCP_PUBLIC_URL=https://mcp.ownlevel.app/mcp`, `RESEND_API_KEY`, `EMAIL_FROM`. Run migrations, then start the API.
-3. In `apps/web`: `pnpm wrangler login`, then `pnpm wrangler secret put PROXY_SHARED_SECRET`.
-4. DNS: in `ownlevel.app`: `app`, `*` and `domains` (proxied), and `api` (DNS-only, pointing at the API host). The records can point at a dummy address (`100::`) because the Worker route answers before any origin is contacted.
-5. `NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN=ownlevel.app pnpm --filter @ownlevel/web cf:deploy`.
-6. Smoke test (see [8_Testing.md](./8_Testing.md)): `app.ownlevel.app/signup` works, a new agency's `{slug}.ownlevel.app/login` shows its branding, and an unknown slug returns "Not found".
-7. Custom domains: enable Cloudflare for SaaS on `ownlevel.app`, set the fallback origin to `domains.ownlevel.app`, and give the domain worker an API token that can manage Custom Hostnames. Check Cloudflare's "Workers as origin for custom hostnames" guidance for the `*/*` route in `wrangler.jsonc`.
+`apps/api/src/worker.ts` wraps the Hono app with `runWithDb` (a per-request pool from Hyperdrive).
 
-**Local preview in the Workers runtime:** `pnpm --filter @ownlevel/web cf:preview` (uses the `preview` environment with no routes, because `wrangler dev` otherwise rewrites `Host` to the first route's hostname and breaks tenant resolution).
+- **Vars** (`wrangler.jsonc`): `BETTER_AUTH_URL=https://app.ownlevel.app` (the platform origin, **not** `api.`), `MCP_PUBLIC_URL=https://mcp.ownlevel.app/mcp`, `PLATFORM_ROOT_DOMAIN`, `PLATFORM_HOSTS`, `EMAIL_FROM`.
+- **Secrets**: `BETTER_AUTH_SECRET`, `PROXY_SHARED_SECRET`, `RESEND_API_KEY`.
+- **Hyperdrive**: create with `wrangler hyperdrive create ownlevel-db --connection-string="postgres://ownlevel_app:...@host:5432/ownlevel"` and paste the id into `wrangler.jsonc`.
 
-## Scenario 1: Single server
+## MCP Worker
 
-One machine runs everything. This is the starting point: no load balancer, no shared-state concerns, one thing to back up.
+`apps/mcp-server/src/worker.ts` serves `POST /mcp`, `/healthz` and the protected-resource metadata. It verifies OAuth access tokens against the API's public keys, so it has no secrets.
 
-```mermaid
-flowchart LR
-  U[Browsers / agency users] --> CF[Cloudflare DNS + proxy]
-  CF -->|HTTPS| P[Caddy reverse proxy]
-  subgraph S[Single server]
-    P --> API[API / web]
-    API --> PG[(Postgres)]
-    API --> V[(Redis)]
-    W[Workers] --> PG
-    W --> V
-  end
+- **Vars**: `MCP_PUBLIC_URL`, `OAUTH_ISSUER=https://app.ownlevel.app/api/auth`, `OAUTH_JWKS_URL=https://api.ownlevel.app/api/auth/jwks`.
+- **Hyperdrive**: the same config as the API.
+- `global_fetch_strictly_public` is set so the JWKS fetch to our own zone goes out over the public route instead of resolving to the zone's origin.
+
+## Deploy runbook
+
+1. In Cloudflare, create the single zone `ownlevel.app`.
+2. Create the Hyperdrive config and put its id in `apps/api/wrangler.jsonc` and `apps/mcp-server/wrangler.jsonc`.
+3. DNS (all proxied): `app`, `*`, `api`, `mcp` and `domains`.
+4. Secrets: `pnpm wrangler secret put BETTER_AUTH_SECRET` and `PROXY_SHARED_SECRET` in `apps/api`, and `PROXY_SHARED_SECRET` in `apps/web` (same value), plus `RESEND_API_KEY`.
+5. Run migrations as a one-off job: `pnpm --filter @ownlevel/api db:migrate`.
+6. Deploy, API first, then MCP, then web:
+   ```bash
+   pnpm --filter @ownlevel/api cf:deploy
+   pnpm --filter @ownlevel/mcp-server cf:deploy
+   NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN=ownlevel.app pnpm --filter @ownlevel/web cf:deploy
+   ```
+7. Smoke test (see [8_Testing.md](./8_Testing.md)): `app.ownlevel.app/signup` works, a new agency's `{slug}.ownlevel.app/login` shows its branding, an unknown slug returns "Not found", `https://mcp.ownlevel.app/healthz` returns `ok`, and an unauthenticated `POST /mcp` returns 401 with a `WWW-Authenticate` header.
+8. Custom domains: enable Cloudflare for SaaS on `ownlevel.app`, set the fallback origin to `domains.ownlevel.app`, and give the domain worker an API token that can manage Custom Hostnames. Check Cloudflare's "Workers as origin for custom hostnames" guidance for the `*/*` route in `apps/web/wrangler.jsonc`.
+
+## Continuous deployment
+
+GitHub Actions deploys each Worker on push to `main` when its folder changes (or manually with "Run workflow"). Each workflow typechecks the app and its workspace dependencies, then runs `wrangler deploy`. Runs of the same workflow never overlap.
+
+| Workflow | Deploys | Runs when these change |
+| --- | --- | --- |
+| `deploy-web.yml` | web Worker | `apps/web/**`, `packages/**`, `pnpm-lock.yaml` |
+| `deploy-api.yml` | API Worker | `apps/api/**`, `packages/**`, `pnpm-lock.yaml` |
+| `deploy-mcp.yml` | MCP Worker (also runs `cf:dry` first) | `apps/mcp-server/**`, `packages/**`, `pnpm-lock.yaml` |
+| `deploy-marketing.yml` | marketing Worker | `apps/marketing/**`, `pnpm-lock.yaml` |
+
+Repository secrets: `CLOUDFLARE_API_TOKEN` (permission "Edit Cloudflare Workers", plus Hyperdrive read) and `CLOUDFLARE_ACCOUNT_ID`. Worker runtime secrets (`BETTER_AUTH_SECRET`, `PROXY_SHARED_SECRET`, `RESEND_API_KEY`) stay in Cloudflare and are not part of CI.
+
+Database migrations are **not** run by these workflows. When a change adds a migration (`apps/api/drizzle/`), run `pnpm --filter @ownlevel/api db:migrate` before merging, so the new code never meets the old schema. Because a change under `packages/**` redeploys the API, MCP and web Workers together, they always ship the same version of shared code.
+
+## Local preview in the Workers runtime
+
+The web and MCP Workers have a `preview` environment with no routes, because `wrangler dev` otherwise rewrites `Host` to the first route's hostname and breaks tenant resolution. The API's `cf:dev` runs it as configured.
+
+```bash
+pnpm --filter @ownlevel/web cf:preview
+pnpm --filter @ownlevel/api cf:dev            # :4000
+pnpm --filter @ownlevel/mcp-server cf:dev     # :4100, talks to the local API and Postgres
 ```
 
-**Layout (containers on one host)**
+For day-to-day work, `pnpm dev` runs the API and MCP server as plain Node processes (`tsx`) against the local Postgres from `docker-compose.yml`. That is for local development only; nothing in production runs on Node.
 
-| Service | Notes |
-| --- | --- |
-| `caddy` | Ports 80/443 only. Holds the wildcard certificate and, if used, on-demand TLS |
-| `api` | One or two replicas on an internal network |
-| `worker` | One or more processes |
-| `postgres` | Data on a dedicated volume |
-| `redis` | Persistence (AOF) on, since sessions live here |
+## Backups and recovery
 
-**Setup steps**
-
-1. Provision the server (Linux, 4+ vCPU, 8+ GB RAM to start) and a firewall that allows only 80/443 and SSH from your IP.
-2. Install Docker and Compose. Create an internal network; publish no ports except Caddy's.
-3. In Cloudflare, add the `api` and `mcp` records for the API host. Set SSL/TLS to **Full (strict)** and install a Cloudflare Origin CA certificate on Caddy (or let Caddy issue its own with DNS-01).
-4. Start Postgres and Redis, then run migrations as a one-off job.
-5. Start `api` and `worker`, then Caddy.
-6. Confirm the host resolver works: `a.ownlevel.app` shows Agency A's login page, and an unknown slug returns a generic 404.
-
-**Alternative: Cloudflare Tunnel.** Run `cloudflared` on the server instead of exposing 80/443. The firewall then blocks all inbound traffic, and Cloudflare routes hostnames to Caddy or the app through the tunnel.
-
-**Backups and recovery**
-
-- Postgres: nightly `pg_dump` or base backup with WAL archiving to object storage; test restores monthly.
-- Redis: AOF on. Losing it signs users out and empties caches, which rebuild from Postgres (see Authentication, "If Redis data is lost or missing"). Queued jobs are the exception: enqueue from a Postgres outbox so they can be replayed.
-- Server snapshots weekly.
-
-**Limits of this setup**
-
-- The server is a single point of failure. Deploys cause a brief blip unless you run two `api` replicas and roll them one at a time.
-- Move to Scenario 2 when CPU or memory is regularly above ~60%, when you need zero-downtime failover, or when an agency requires an uptime SLA.
-
-## Scenario 2: Multiple servers
-
-Separate the tiers. Add a load balancer in front of the app machines. Move state to dedicated or managed services.
-
-```mermaid
-flowchart TB
-  U[Browsers / agency users] --> CF[Cloudflare DNS + proxy]
-  CF --> LB[Load balancer]
-  LB --> A1[App server 1: proxy + api]
-  LB --> A2[App server 2: proxy + api]
-  A1 --> V[(Redis primary + replica)]
-  A2 --> V
-  A1 --> PGP[(Postgres primary)]
-  A2 --> PGP
-  PGP -. replication .-> PGR[(Postgres replica)]
-  W1[Worker server 1] --> PGP
-  W2[Worker server 2] --> PGP
-  W1 --> V
-  W2 --> V
-  SCH[Single scheduler] --> V
-```
-
-**Machines**
-
-| Tier | Count | Notes |
-| --- | --- | --- |
-| Load balancer | 1 managed, or 2 for HA | Health checks on `/healthz`; spreads across app servers |
-| App servers | 2+ | Stateless; each runs a local proxy and `api` |
-| Worker servers | 1+ | Scale by queue depth |
-| Postgres | Primary plus replica | Prefer a managed service; PgBouncer for connection pooling |
-| Redis | Primary plus replica (or managed) | Shared by all app and worker machines |
-
-**Load balancer options**
-
-| Option | Good for | Watch for |
-| --- | --- | --- |
-| Cloudflare Load Balancing (paid add-on) | Already proxying through Cloudflare; built-in health checks and failover | Extra cost; still need a good origin certificate on each app server |
-| Managed cloud LB (Hetzner, DigitalOcean, AWS ALB) | Simple, no machine to maintain | Wildcard and custom-domain certificates must be handled on the LB or passed through |
-| Self-run HAProxy / Caddy pair | Full control, cheapest | You must run two for HA and manage failover |
-
-**Setup steps**
-
-1. Move Postgres and Redis off the app machine first (managed services recommended). Update connection strings; restart the single server and verify before adding machines.
-2. Build the app image once; deploy the same image to every app and worker machine.
-3. Create the load balancer with a health check on `/healthz`. Add the app servers, and set the proxy IPs the app is allowed to trust for `X-Forwarded-*`.
-4. Certificates:
-   - With Cloudflare proxying: install the same Origin CA certificate on every app server (or on the LB if it terminates TLS to origin).
-   - With Caddy-issued certificates: use shared storage for Caddy's data directory, or terminate TLS only at the LB tier, so machines do not each request their own wildcard certificate.
-5. Run the scheduler as one instance (or enable the Redis job lock) so domain re-verification and cleanup run once.
-6. Run migrations from one place in the deploy pipeline, before rolling out the new app version.
-7. Roll out deploys one app server at a time: remove it from the LB, update it, wait for health, then re-add it.
-8. Add monitoring and alerts: LB 5xx rate, p95 latency, queue depth, Postgres replication lag, Redis memory, certificate expiry.
-
-**Scaling signals**
-
-| Signal | Action |
-| --- | --- |
-| API CPU or latency high | Add an app server |
-| Queue depth growing | Add a worker server |
-| Postgres CPU or connections high | Add PgBouncer, move reads to the replica, then scale up the primary |
-| Redis memory high | Shorten session TTL cleanup, then scale up |
-
-**Failure behavior**
-
-- An app server dies: the LB's health check removes it; users see no session loss, because sessions are in Redis.
-- A worker dies: jobs stay in the queue and are retried by another worker.
-- Redis fails over: users may be signed out; no data is lost.
-- Postgres primary fails: promote the replica (automatic with a managed service); the app reconnects.
-
-## Choosing a scenario
-
-| Situation | Use |
-| --- | --- |
-| Pre-launch, first agencies, no SLA | Scenario 1 |
-| Several paying agencies, deploys without downtime wanted | Scenario 1 with two `api` replicas, or begin Scenario 2 step 1 |
-| SLA commitments, sustained load, or failover requirement | Scenario 2 |
-
-The move from Scenario 1 to 2 does not change the application. It moves state out first (Postgres, Redis), then adds app machines and a load balancer.
+- Postgres is a managed service: enable point-in-time recovery, and test a restore monthly.
+- Losing a Worker deployment loses nothing: no state lives there. Redeploy from git.
+- Signing keys (`jwks` table) and OAuth grants are in Postgres, so they are covered by the same backups. Restoring an old backup invalidates tokens issued after it.

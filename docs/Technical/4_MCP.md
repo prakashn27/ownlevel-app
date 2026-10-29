@@ -129,54 +129,66 @@ How the pieces enforce the model:
 
 ## Production
 
-Topology: the browser only talks to `app.ownlevel.app` (the web Worker). It proxies `/api/*` **and `/.well-known/*`** to the API, so the authorization server lives on the platform origin and shares the browser's session cookie. The MCP server runs on our servers at `mcp.ownlevel.app`.
+Everything is a Cloudflare Worker (see [3_Deployment.md](./3_Deployment.md)): the browser talks to `app.ownlevel.app` (web Worker), which proxies `/api/*` and `/.well-known/*` to the API Worker, so the authorization server lives on the platform origin and shares the browser's session cookie. The MCP Worker serves `mcp.ownlevel.app`.
 
 ```mermaid
 flowchart LR
-  C[MCP client] -->|"/mcp, Bearer JWT"| M["mcp.ownlevel.app (apps/mcp-server)"]
-  C -->|"discovery, authorize, token, register"| W["app.ownlevel.app (web Worker)"]
-  W -->|"/api/*, /.well-known/* + proxy secret"| A["API (authorization server)"]
-  M -->|"JWKS"| W
-  M --> DB[(Postgres)]
-  A --> DB
+  C[MCP client] -->|"/mcp, Bearer JWT"| M["MCP Worker<br/>mcp.ownlevel.app"]
+  C -->|"discovery, authorize, token, register"| W["web Worker<br/>app.ownlevel.app"]
+  W -->|"/api/*, /.well-known/* + proxy secret"| A["API Worker<br/>api.ownlevel.app"]
+  M -->|JWKS| A
+  M --> H[Hyperdrive]
+  A --> H
+  H --> DB[(Postgres)]
 ```
 
-What was wrong before, and is now fixed:
+Design decisions that matter in production:
 
-| Problem | Fix |
+| Decision | Why |
 | --- | --- |
-| Issuer was `api.ownlevel.app`. The browser session cookie is host-only on `app.ownlevel.app`, so `/oauth2/authorize` never saw the login and looped. (Local dev hid this: cookies ignore ports on `localhost`.) | `BETTER_AUTH_URL` is the platform origin; `/.well-known/*` is proxied by the web app (`apps/web/app/.well-known`, shared `lib/api-proxy.ts`). |
-| Dynamic registration is dev-only, so no production client could register. | `@better-auth/cimd` (Client ID Metadata Documents, SSRF-guarded fetch) is on by default; dynamic registration is off unless `OAUTH_OPEN_REGISTRATION=1`. |
-| Login and consent URLs came from `WEB_ORIGINS`, empty in production. | `WEB_URL`, defaulting to `https://<first PLATFORM_HOSTS>` when the API is not on localhost. |
-| `MCP_ORIGIN`, `MCP_PUBLIC_URL` and the challenge URL could drift apart. | The challenge and metadata URLs derive from `MCP_PUBLIC_URL`. The server refuses to start in production with non-https URLs or without `DATABASE_URL`. |
+| Issuer is `https://app.ownlevel.app/api/auth` (`BETTER_AUTH_URL`), not `api.` | The browser session cookie is host-only on `app.`, so `/oauth2/authorize` must be served from there or it never sees the login. Local dev hides this because cookies ignore ports on `localhost`. |
+| The web Worker proxies `/.well-known/*` as well as `/api/*` | OAuth discovery lives at the origin root. See `apps/web/app/.well-known` and `lib/api-proxy.ts`. |
+| Clients register with CIMD (`@better-auth/cimd`), dynamic registration is off unless `OAUTH_OPEN_REGISTRATION=1` | Open registration lets anyone create OAuth clients. |
+| CIMD metadata is fetched by `apps/api/src/cimd-fetch.ts`, not the Node transport | The Node transport pins DNS and needs `node:dns`. Workers cannot reach private or loopback addresses; the fetch also requires a public https hostname on port 443, never follows redirects, and caps time (5 s) and size (64 KB). It cannot pin DNS, so it relies on that Workers isolation. |
+| The MCP Worker verifies tokens with `jose`, not `@better-auth/mcp`'s request handler | Bundled together with the MCP SDK, the two zod module graphs initialise in the wrong order and the Worker fails at startup ("Class2 is not a constructor"). Plain JWKS verification does the same checks (signature, issuer, audience, expiry). |
+| JWKS is fetched from `api.ownlevel.app` directly (`OAUTH_JWKS_URL`) | Skips a hop through the web Worker. |
+| Public URLs derive from `MCP_PUBLIC_URL` | The challenge and metadata URLs cannot drift from the token audience. Outside localhost the server refuses to start with non-https URLs. |
 
-**Environment**
+**Configuration** (`apps/mcp-server/wrangler.jsonc` and `apps/api/wrangler.jsonc`)
 
 | Where | Variable | Production value |
 | --- | --- | --- |
 | API | `BETTER_AUTH_URL` | `https://app.ownlevel.app` |
-| API | `MCP_PUBLIC_URL` | `https://mcp.ownlevel.app/mcp` (token audience; must equal the MCP server's) |
-| API | `OAUTH_CIMD` | unset (on). `0` on Workers |
+| API | `MCP_PUBLIC_URL` | `https://mcp.ownlevel.app/mcp` (token audience; must equal the MCP Worker's) |
+| API | `OAUTH_CIMD` | unset (on) |
 | API | `OAUTH_OPEN_REGISTRATION` | unset (off) |
-| API | `WEB_URL` | optional; defaults to the platform host |
-| MCP server | `NODE_ENV` | `production` |
-| MCP server | `MCP_PUBLIC_URL` | `https://mcp.ownlevel.app/mcp` |
-| MCP server | `OAUTH_ISSUER` | `https://app.ownlevel.app/api/auth` |
-| MCP server | `DATABASE_URL` | the non-owner app role (RLS applies) |
-| MCP server | `MCP_DEV_AUTH` | never set |
+| MCP | `MCP_PUBLIC_URL` | `https://mcp.ownlevel.app/mcp` |
+| MCP | `OAUTH_ISSUER` | `https://app.ownlevel.app/api/auth` |
+| MCP | `OAUTH_JWKS_URL` | `https://api.ownlevel.app/api/auth/jwks` |
+| MCP | `MCP_DEV_AUTH` | never set (dev tokens also refuse to start unless the issuer is `localhost`) |
 
-**Run**: `pnpm --filter @ownlevel/mcp-server start` (behind Caddy on `mcp.ownlevel.app`; health at `/healthz`). Run the `0005` migration first.
+**Deploy**: run migration `0005`, then `pnpm --filter @ownlevel/api cf:deploy` and `pnpm --filter @ownlevel/mcp-server cf:deploy` (full runbook in 3_Deployment.md). `mcp` needs a proxied DNS record.
 
-**Verified**: `test:oauth` also passes in a production-shaped setup, with the issuer on a proxied single origin, and it checks that removing a membership rejects a still-valid token. Run it against the API and MCP server with `API_URL`, `MCP_URL` and `WEB_URL` pointing at that origin.
+**Verify** (read-only):
+
+```bash
+curl https://mcp.ownlevel.app/healthz                                   # ok
+curl -i -X POST https://mcp.ownlevel.app/mcp -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+# 401 with: WWW-Authenticate: Bearer resource_metadata="https://mcp.ownlevel.app/.well-known/oauth-protected-resource/mcp", scope="agency:settings"
+curl https://app.ownlevel.app/.well-known/oauth-authorization-server/api/auth   # has client_id_metadata_document_supported: true
+```
+
+**Tested**: `test:oauth` passes against the MCP Worker running in `workerd` (`pnpm --filter @ownlevel/mcp-server cf:dev`) and against a production-shaped single origin (issuer on the proxied web origin). It includes a check that removing a membership rejects a still-valid token.
 
 **Not verified or still open before launch**
 
 - CIMD against a real client over public HTTPS (it cannot run on localhost). Do this against staging with Claude or ChatGPT.
-- The API as a Cloudflare Worker: it bundles, but CIMD's DNS pinning needs Node, so with `OAUTH_CIMD=0` there is no way for clients to register. Run the API on Node (the Caddy scenario) for MCP.
-- Rate limiting of `/oauth2/*` across instances: Better Auth's default limiter is per process. Back it with Redis (`secondaryStorage`) when running more than one API instance.
-- No Dockerfile or Caddy entry for the MCP server exists yet.
+- Rate limiting of `/oauth2/*`: Better Auth's default limiter is per isolate, so it does not protect a multi-instance deployment. Add a shared store or Cloudflare rate-limiting rules.
+- The JWKS table can accumulate signing keys (32 were seen in one deployment). Investigate whether Hyperdrive query caching hides the existing key from new isolates; if so, disable caching on the Hyperdrive config.
+- DPoP-bound tokens are not enforced by the MCP Worker.
 - Browser-based MCP clients need CORS on the MCP and OAuth endpoints; server-side connectors (Claude, ChatGPT) do not.
-- Single platform login host (no agency branding on the OAuth login page), consent page does not show the picked agency, and there is no per-installation revoke or audit trail yet.
+- Single platform login host (no agency branding on the OAuth login page), the consent page does not show the picked agency, and there is no per-installation revoke or audit trail yet.
 
 ## Testing locally with a real LLM client
 
@@ -191,7 +203,8 @@ docker compose up -d postgres
 pnpm --filter @ownlevel/api db:migrate
 pnpm --filter @ownlevel/api dev              # :4000 (authorization server)
 pnpm --filter @ownlevel/web dev              # :3100 (login, picker, consent pages)
-MCP_DEV_AUTH=1 pnpm --filter @ownlevel/mcp-server dev   # :4100/mcp (drop MCP_DEV_AUTH=1 to turn dev tokens off)
+MCP_DEV_AUTH=1 pnpm --filter @ownlevel/mcp-server dev   # :4100/mcp, plain Node for local use (drop MCP_DEV_AUTH=1 to turn dev tokens off)
+# or in the Workers runtime: pnpm --filter @ownlevel/mcp-server cf:dev
 ```
 
 **2. Automated end-to-end check** (plays browser and MCP client: sign-up, agency, registration, PKCE, picker, consent, token, tool call, refresh)
@@ -320,7 +333,8 @@ Agency staff keep the existing agency-level install, which can reach several cli
 | Registry, handler, `agency_set_brand_color`, `updateBrandColor` | Done (typechecked, smoke-tested with a fake context) |
 | Better Auth OAuth provider (`jwt` + `mcp` plugins), migration `0005`, login / agency picker / consent pages | Done; verified by `test:oauth` (not yet with a real LLM client) |
 | JWT verification, live membership check, `/.well-known/oauth-protected-resource` | Done. Per-installation revocation (`app_installations`) is not built; consent rows and short token life stand in for it |
-| Client ID Metadata Documents (`@better-auth/cimd`) replacing dynamic registration in production | Wired and advertised; not tested with a real client (needs public HTTPS) |
+| Client ID Metadata Documents (`@better-auth/cimd`) with a Workers-safe fetch, replacing dynamic registration in production | Wired; not tested with a real client (needs public HTTPS) |
+| MCP Worker (`apps/mcp-server/wrangler.jsonc`, `src/worker.ts`) | Built and tested in `workerd`; deploy and DNS record pending |
 | Consent page shows the picked agency; agency-branded login host | Not started |
 | `audit_log` writes | `modules/audit` is a stub |
 | Approval flow for `outbound` / `destructive` | Not started |

@@ -5,17 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
+    "cf:deploy": "wrangler deploy",
+    "cf:dev": "wrangler dev --env preview --port 4100",
+    "cf:dry": "wrangler deploy --dry-run --outdir .wrangler/dry",
     "typecheck": "tsc --noEmit",
-    "test:oauth": "tsx test/oauth-e2e.ts",
-    "start": "tsx src/server.ts"
+    "test:oauth": "tsx test/oauth-e2e.ts"
   },
   "dependencies": {
-    "@better-auth/mcp": "1.7.14",
     "@hono/node-server": "^1.19.17",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@ownlevel/ai": "workspace:*",
     "@ownlevel/core": "workspace:*",
     "drizzle-orm": "^0.45.4",
+    "jose": "^6.2.14",
     "pg": "^8.23.1",
     "zod": "4.6.7"
   },
@@ -23,6 +25,7 @@
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "^4.154.0"
   }
 }

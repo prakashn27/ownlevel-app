@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ownlevel-mcp",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-09-01",
+  // nodejs_compat: pg, node:async_hooks. global_fetch_strictly_public: fetches to our own zone (JWKS) go out
+  // through the public route instead of resolving to this zone's origin.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "observability": { "enabled": true },
+
+  // Same Hyperdrive config as the API. The role must NOT be superuser/BYPASSRLS.
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "3f07738b696246ad83692a07daa88f14", "localConnectionString": "postgres://ownlevel:ownlevel@localhost:5432/ownlevel" }],
+
+  // No secrets: tokens are verified against public keys.
+  "vars": {
+    "MCP_PUBLIC_URL": "https://mcp.ownlevel.app/mcp",
+    "OAUTH_ISSUER": "https://app.ownlevel.app/api/auth",
+    // Straight to the API instead of through the web Worker.
+    "OAUTH_JWKS_URL": "https://api.ownlevel.app/api/auth/jwks"
+  },
+
+  // A route, not a custom domain: the web Worker's `*.ownlevel.app/*` route also matches this host, and the
+  // more specific pattern here wins. Needs a proxied (orange-cloud) DNS record for `mcp` in zone ownlevel.app
+  // (a dummy A 192.0.2.1 works).
+  "routes": [{ "pattern": "mcp.ownlevel.app/*", "zone_name": "ownlevel.app" }],
+
+  // Local preview in the Workers runtime against the local API (:4000) and Postgres: no routes, because
+  // `wrangler dev` otherwise rewrites Host to the first route's hostname.
+  "env": {
+    "preview": {
+      "routes": [],
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "3f07738b696246ad83692a07daa88f14", "localConnectionString": "postgres://ownlevel:ownlevel@localhost:5432/ownlevel" }],
+      "vars": {
+        "MCP_PUBLIC_URL": "http://localhost:4100/mcp",
+        "OAUTH_ISSUER": "http://localhost:4000/api/auth",
+        "OAUTH_JWKS_URL": "http://localhost:4000/api/auth/jwks"
+      }
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { oneTimeToken } from "better-auth/plugins/one-time-token";
 import { jwt } from "better-auth/plugins/jwt";
 import { mcp } from "@better-auth/mcp";
+import { cimd } from "@better-auth/cimd";
 import {
   hasAgencyMembership,
   isKnownHost,
@@ -11,6 +12,7 @@ import {
   schema,
   sendEmail,
 } from "@ownlevel/core";
+import { fetchClientMetadataResource } from "./cimd-fetch.js";
 import { background, db } from "./db/index.js";
 import { transport, fromAddress } from "./email.js";
 import { env } from "./env.js";
@@ -45,19 +47,6 @@ async function sendReset(userId: string, to: string, token: string, request: Req
   if (resolved.kind === "agency") await sendEmail(db, transport, { agencyId: resolved.agencyId }, msg);
   else await transport(msg);
 }
-
-/** CIMD needs node:dns / node:https to pin DNS answers (SSRF guard), so it loads only where those exist. */
-async function cimdPlugins() {
-  if (!env.oauthCimd) return [];
-  try {
-    const [{ cimd }, { fetchClientMetadataResource }] = await Promise.all([import("@better-auth/cimd"), import("@better-auth/cimd/node")]);
-    return [cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" })];
-  } catch (e) {
-    console.warn("CIMD disabled: runtime lacks Node networking (set OAUTH_CIMD=0 to silence)", e);
-    return [];
-  }
-}
-const cimdPlugin = await cimdPlugins();
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg", schema }),
@@ -119,6 +108,7 @@ export const auth = betterAuth({
       },
       customAccessTokenClaims: ({ referenceId }) => (referenceId ? { agency_id: referenceId } : {}),
     }),
-    ...cimdPlugin,
+    // Production clients identify themselves by an https metadata URL instead of registering.
+    ...(env.oauthCimd ? [cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" })] : []),
   ],
 });
