@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,8 @@ import { useClient } from "../client-workspace";
 
 export default function Settings() {
   const { client, label, reload } = useClient();
+  const t = useTranslations();
+  const labelLower = label.toLowerCase();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
@@ -37,21 +40,21 @@ export default function Settings() {
   return (
     <>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <Label>Name<Input name="name" defaultValue={client.name} required maxLength={120} /></Label>
-        <Label>Timezone<TimezoneSelect name="timezone" defaultValue={client.timezone} /></Label>
-        <Label>Currency<Input name="currency" defaultValue={client.currency} required maxLength={3} /></Label>
+        <Label>{t("client.settings.name")}<Input name="name" defaultValue={client.name} required maxLength={120} /></Label>
+        <Label>{t("client.settings.timezone")}<TimezoneSelect name="timezone" defaultValue={client.timezone} /></Label>
+        <Label>{t("client.settings.currency")}<Input name="currency" defaultValue={client.currency} required maxLength={3} /></Label>
         {error && <Alert variant="destructive">{error}</Alert>}
-        {saved && <Alert variant="success">Saved.</Alert>}
-        <div><Button disabled={pending}>Save</Button></div>
+        {saved && <Alert variant="success">{t("common.saved")}</Alert>}
+        <div><Button disabled={pending}>{t("common.save")}</Button></div>
       </form>
-      <h2>{archived ? "Restore" : "Archive"}</h2>
+      <h2>{archived ? t("client.settings.restore") : t("client.settings.archive")}</h2>
       <p className="mb-3 text-sm text-muted-foreground">
         {archived
-          ? `Restoring makes this ${label.toLowerCase()} active again.`
-          : `Archiving hides this ${label.toLowerCase()} from the switcher and stops new invitations. Nothing is deleted.`}
+          ? t("client.settings.restoreHelp", { labelLower })
+          : t("client.settings.archiveHelp", { labelLower })}
       </p>
       <Button variant={archived ? "secondary" : "outline"} disabled={pending} onClick={() => patch({ status: archived ? "active" : "archived" })}>
-        {archived ? `Restore ${label.toLowerCase()}` : `Archive ${label.toLowerCase()}`}
+        {archived ? t("client.settings.restoreButton", { labelLower }) : t("client.settings.archiveButton", { labelLower })}
       </Button>
     </>
   );

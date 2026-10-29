@@ -1,11 +1,14 @@
 import "./globals.css";
 import type { CSSProperties, ReactNode } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getTranslations } from "next-intl/server";
 import { getHostInfo } from "../lib/server-api";
 import { isFaviconHost } from "../lib/favicon";
 
 export async function generateMetadata() {
   const info = await getHostInfo();
-  const title = info.kind === "agency" ? (info.branding.appName ?? info.name) : "Ownlevel";
+  const t = await getTranslations("meta");
+  const title = info.kind === "agency" ? (info.branding.appName ?? info.name) : t("defaultTitle");
   // Only app.ownlevel.app gets a favicon; other hosts explicitly get none.
   const icons = (await isFaviconHost())
     ? [
@@ -19,11 +22,12 @@ export async function generateMetadata() {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const info = await getHostInfo();
+  const locale = await getLocale();
   const style = (info.kind === "agency" && info.branding.primaryColor
     ? { "--brand": info.branding.primaryColor }
     : undefined) as CSSProperties | undefined;
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body style={style} className={info.kind === "agency" ? undefined : "theme-ownlevel"}>
         {info.kind === "agency" && (
           <header className="flex items-center gap-2 border-b bg-card px-5 py-3">
@@ -31,7 +35,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <strong className="font-semibold">{info.branding.appName ?? info.name}</strong>
           </header>
         )}
-        {children}
+        <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>
     </html>
   );

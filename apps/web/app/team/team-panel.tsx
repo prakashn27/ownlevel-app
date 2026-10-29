@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ type Team = {
 };
 
 export function TeamPanel() {
+  const t = useTranslations();
   const [team, setTeam] = useState<Team | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export function TeamPanel() {
     const r = await api<{ email: string }>("/api/team/invitations", { body: { email: f.get("email"), role: f.get("role") } });
     setPending(false);
     if (!r.ok) { void load(); return setError(r.error); }
-    setNotice(`Invitation sent to ${r.data.email}`);
+    setNotice(t("common.invitationSent", { email: r.data.email }));
     form.reset();
     void load();
   }
@@ -47,23 +49,23 @@ export function TeamPanel() {
 
   return (
     <>
-      <h1>Team</h1>
+      <h1>{t("team.title")}</h1>
       <form onSubmit={invite} className="mb-4 flex items-center gap-2">
-        <Input name="email" type="email" placeholder="Email to invite" required />
+        <Input name="email" type="email" placeholder={t("common.emailToInvite")} required />
         <Select name="role" defaultValue="agency_user">
           <SelectTrigger className="w-44 shrink-0"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="agency_user">Agency user</SelectItem>
-            <SelectItem value="agency_admin">Agency admin</SelectItem>
+            <SelectItem value="agency_user">{t("team.agencyUser")}</SelectItem>
+            <SelectItem value="agency_admin">{t("team.agencyAdmin")}</SelectItem>
           </SelectContent>
         </Select>
-        <Button disabled={pending}>Invite</Button>
+        <Button disabled={pending}>{t("common.invite")}</Button>
       </form>
       {error && <Alert variant="destructive">{error}</Alert>}
       {notice && <Alert variant="success">{notice}</Alert>}
       {team && (
         <>
-          <h2>Members</h2>
+          <h2>{t("team.members")}</h2>
           <Table>
             <TableBody>
               {team.members.map((m) => (
@@ -73,13 +75,13 @@ export function TeamPanel() {
           </Table>
           {team.pending.length > 0 && (
             <>
-              <h2>Pending invitations</h2>
+              <h2>{t("common.pendingInvitations")}</h2>
               <Table>
                 <TableBody>
                   {team.pending.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell>{p.email}</TableCell><TableCell><Badge>{p.roleName}</Badge></TableCell>
-                      <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => revoke(p.id)}>Revoke</Button></TableCell>
+                      <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => revoke(p.id)}>{t("common.revoke")}</Button></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

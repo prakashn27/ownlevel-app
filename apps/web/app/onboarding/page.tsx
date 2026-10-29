@@ -1,5 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,8 @@ const slugify = (s: string) =>
 const ROOT = process.env.NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN ?? "localhost";
 
 export default function Onboarding() {
+  const t = useTranslations("onboarding");
+  const tc = useTranslations("common");
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const [name, setName] = useState("");
@@ -54,7 +57,7 @@ export default function Onboarding() {
     });
     setPending(false);
     const body = await res.json();
-    if (!res.ok) return setError(body.message ?? "Something went wrong");
+    if (!res.ok) return setError(body.message ?? tc("somethingWentWrong"));
     // Sessions are host-bound: mint a one-time token so the owner lands signed in on the new host.
     const ott = await authClient.oneTimeToken.generate();
     if (ott.data?.token) {
@@ -64,16 +67,16 @@ export default function Onboarding() {
     setCreated(body);
   }
 
-  if (isPending || !session) return <AuthCard><p>Loading…</p></AuthCard>;
+  if (isPending || !session) return <AuthCard><p>{tc("loading")}</p></AuthCard>;
 
   if (created) {
     const { protocol, port } = window.location;
     const url = `${protocol}//${created.hostname}${port ? `:${port}` : ""}/login`;
     return (
-      <AuthCard title={`${created.name} is ready`}>
-        <p>Your agency portal lives at:</p>
+      <AuthCard title={t("ready", { name: created.name })}>
+        <p>{t("livesAt")}</p>
         <p><a href={url}>{created.hostname}</a></p>
-        <p className="text-sm text-muted-foreground">Sign in there with the same email and password. You can add your own domain later in Settings.</p>
+        <p className="text-sm text-muted-foreground">{t("signInThere")}</p>
       </AuthCard>
     );
   }
@@ -81,26 +84,26 @@ export default function Onboarding() {
   const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC";
 
   return (
-    <AuthCard title="Set up your agency">
+    <AuthCard title={t("title")}>
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Agency name" required minLength={2} />
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("agencyName")} required minLength={2} />
         <div className="flex flex-col gap-1.5">
           <Input
             value={slug}
             onChange={(e) => { setSlugTouched(true); setSlug(e.target.value.toLowerCase()); }}
-            placeholder="your-agency"
+            placeholder={t("slugPlaceholder")}
             required
           />
           <p className="text-xs text-muted-foreground">
-            {slug || "your-agency"}.{ROOT}
-            {available === true && " · available"}
-            {available === false && " · not available"}
+            {slug || t("slugPlaceholder")}.{ROOT}
+            {available === true && ` · ${t("available")}`}
+            {available === false && ` · ${t("notAvailable")}`}
           </p>
         </div>
-        <Input name="timezone" defaultValue={tz} placeholder="Timezone" required />
-        <Input name="currency" defaultValue="USD" placeholder="Currency" maxLength={3} required />
+        <Input name="timezone" defaultValue={tz} placeholder={t("timezone")} required />
+        <Input name="currency" defaultValue="USD" placeholder={t("currency")} maxLength={3} required />
         {error && <Alert variant="destructive">{error}</Alert>}
-        <Button disabled={pending || available === false}>Create agency</Button>
+        <Button disabled={pending || available === false}>{t("create")}</Button>
       </form>
     </AuthCard>
   );

@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,8 @@ import { AuthCard } from "../../components/auth-card";
 import { authClient } from "../../lib/auth-client";
 
 export default function ForgotPassword() {
+  const t = useTranslations("auth.forgot");
+  const tc = useTranslations("common");
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -22,16 +25,16 @@ export default function ForgotPassword() {
   }
 
   return (
-    <AuthCard title="Reset your password">
+    <AuthCard title={t("title")}>
       {sent ? (
-        <p>If that email has an account here, we’ve sent a reset link. It expires in 1 hour.</p>
+        <p>{t("sent")}</p>
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <Input name="email" type="email" placeholder="Email" required />
-          <Button disabled={pending}>Send reset link</Button>
+          <Input name="email" type="email" placeholder={tc("emailPlaceholder")} required />
+          <Button disabled={pending}>{t("send")}</Button>
         </form>
       )}
-      <p className="text-sm"><Link href="/login">Back to sign in</Link></p>
+      <p className="text-sm"><Link href="/login">{t("back")}</Link></p>
     </AuthCard>
   );
 }

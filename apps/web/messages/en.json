@@ -1,0 +1,161 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "notFound": "Not found.",
+    "save": "Save",
+    "saved": "Saved.",
+    "signOut": "Sign out",
+    "archived": "Archived",
+    "active": "Active",
+    "invite": "Invite",
+    "revoke": "Revoke",
+    "somethingWentWrong": "Something went wrong",
+    "emailPlaceholder": "Email",
+    "passwordPlaceholder": "Password",
+    "emailToInvite": "Email to invite",
+    "pendingInvitations": "Pending invitations",
+    "invitationSent": "Invitation sent to {email}",
+    "defaultClientLabel": "Client"
+  },
+  "meta": {
+    "defaultTitle": "Ownlevel"
+  },
+  "timezone": {
+    "select": "Select timezone",
+    "search": "Search timezones…",
+    "none": "No timezones found."
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "createAccount": "Create account",
+    "signUp": "Sign up",
+    "namePlaceholder": "Name",
+    "forgotPassword": "Forgot password?",
+    "createAgencyAccount": "Create an agency account",
+    "haveAccount": "Have an account? Sign in",
+    "forgot": {
+      "title": "Reset your password",
+      "sent": "If that email has an account here, we’ve sent a reset link. It expires in 1 hour.",
+      "send": "Send reset link",
+      "back": "Back to sign in"
+    },
+    "reset": {
+      "title": "Choose a new password",
+      "invalidLink": "This reset link is invalid.",
+      "requestNew": "Request a new one",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm new password",
+      "mismatch": "Passwords don’t match.",
+      "expired": "This link has expired or was already used.",
+      "submit": "Set new password"
+    },
+    "handoff": {
+      "expired": "That link expired.",
+      "signingIn": "Signing you in…"
+    }
+  },
+  "invite": {
+    "title": "Join your team",
+    "invalid": "This invitation is invalid or has expired. Ask your admin to send a new one.",
+    "invitedAs": "You’ve been invited to <b>{agency}</b> as <b>{role}</b>.",
+    "accept": "Accept invitation",
+    "signedInAs": "You’re signed in as {current}. This invitation is for {invited}.",
+    "yourName": "Your name",
+    "yourPassword": "Your password",
+    "choosePassword": "Choose a password",
+    "signInAndAccept": "Sign in and accept",
+    "createAndAccept": "Create account and accept"
+  },
+  "onboarding": {
+    "title": "Set up your agency",
+    "ready": "{name} is ready",
+    "livesAt": "Your agency portal lives at:",
+    "signInThere": "Sign in there with the same email and password. You can add your own domain later in Settings.",
+    "agencyName": "Agency name",
+    "slugPlaceholder": "your-agency",
+    "available": "available",
+    "notAvailable": "not available",
+    "timezone": "Timezone",
+    "currency": "Currency",
+    "create": "Create agency"
+  },
+  "dashboard": {
+    "hello": "Hello, {name}",
+    "yourAgencies": "Your agencies",
+    "createAnother": "Create another agency",
+    "welcome": "Welcome to {name}",
+    "viewClients": "View your {labelLower}s"
+  },
+  "shell": {
+    "noAccess": "You don’t have access to this portal.",
+    "agencyView": "Agency view",
+    "clientView": "{label} view",
+    "changesClient": "Changes here apply only to this {labelLower}.",
+    "changesAgency": "Changes here apply to the whole agency.",
+    "backToAgency": "Back to agency",
+    "switchClient": "Switch {labelLower}",
+    "openClient": "Open {labelLower}…",
+    "nav": {
+      "overview": "Overview",
+      "people": "People",
+      "settings": "Settings",
+      "dashboard": "Dashboard",
+      "clients": "{label}s",
+      "team": "Team",
+      "branding": "Branding"
+    }
+  },
+  "clients": {
+    "title": "{label}s",
+    "new": "New {labelLower}",
+    "name": "Name",
+    "timezone": "Timezone",
+    "currency": "Currency",
+    "agencyDefault": "Agency default",
+    "create": "Create {labelLower}",
+    "empty": "No {labelLower}s yet."
+  },
+  "client": {
+    "notFound": "{label} not found.",
+    "overview": {
+      "status": "Status",
+      "timezone": "Timezone",
+      "currency": "Currency",
+      "created": "Created"
+    },
+    "people": {
+      "intro": "People at this {labelLower} who can sign in to its portal.",
+      "archivedNotice": "This {labelLower} is archived. Restore it in Settings to invite people.",
+      "clientUser": "Client user",
+      "clientAdmin": "Client admin",
+      "empty": "No one has access yet."
+    },
+    "settings": {
+      "name": "Name",
+      "timezone": "Timezone",
+      "currency": "Currency",
+      "restore": "Restore",
+      "archive": "Archive",
+      "restoreHelp": "Restoring makes this {labelLower} active again.",
+      "archiveHelp": "Archiving hides this {labelLower} from the switcher and stops new invitations. Nothing is deleted.",
+      "restoreButton": "Restore {labelLower}",
+      "archiveButton": "Archive {labelLower}"
+    }
+  },
+  "team": {
+    "title": "Team",
+    "members": "Members",
+    "agencyUser": "Agency user",
+    "agencyAdmin": "Agency admin"
+  },
+  "branding": {
+    "title": "Branding",
+    "intro": "Shown on your login page, emails and portal.",
+    "appName": "App name",
+    "logoUrl": "Logo URL",
+    "primaryColor": "Primary color",
+    "clientLabelQuestion": "What do you call your clients?",
+    "clientLabelPlaceholder": "Client (e.g. Account, Location)",
+    "preview": "Preview"
+  }
+}

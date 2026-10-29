@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,9 @@ import { TimezoneSelect } from "@/components/ui/timezone-select";
 type Client = { id: string; name: string; timezone: string; currency: string; status: string };
 
 export function ClientsPanel({ label }: { label: string }) {
+  const t = useTranslations("clients");
+  const tc = useTranslations("common");
+  const labelLower = label.toLowerCase();
   const [clients, setClients] = useState<Client[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -40,28 +44,28 @@ export function ClientsPanel({ label }: { label: string }) {
 
   return (
     <>
-      <h1>{label}s</h1>
+      <h1>{t("title", { label })}</h1>
       <Card className="mb-6">
-        <CardHeader><CardTitle>New {label.toLowerCase()}</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("new", { labelLower })}</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={create} className="flex flex-col gap-4">
-            <Label>Name<Input name="name" required maxLength={120} /></Label>
+            <Label>{t("name")}<Input name="name" required maxLength={120} /></Label>
             <div className="grid grid-cols-2 gap-3">
-              <Label>Timezone<TimezoneSelect name="timezone" emptyLabel="Agency default" /></Label>
-              <Label>Currency<Input name="currency" placeholder="Agency default" maxLength={3} /></Label>
+              <Label>{t("timezone")}<TimezoneSelect name="timezone" emptyLabel={t("agencyDefault")} /></Label>
+              <Label>{t("currency")}<Input name="currency" placeholder={t("agencyDefault")} maxLength={3} /></Label>
             </div>
-            <div><Button disabled={pending}>Create {label.toLowerCase()}</Button></div>
+            <div><Button disabled={pending}>{t("create", { labelLower })}</Button></div>
           </form>
         </CardContent>
       </Card>
       {error && <Alert variant="destructive">{error}</Alert>}
-      {clients && clients.length === 0 && <p className="text-muted-foreground">No {label.toLowerCase()}s yet.</p>}
+      {clients && clients.length === 0 && <p className="text-muted-foreground">{t("empty", { labelLower })}</p>}
       {clients && clients.length > 0 && (
         <Table>
           <TableBody>
             {clients.map((c) => (
               <TableRow key={c.id}>
-                <TableCell><Link href={`/client/${c.id}`} className="font-medium">{c.name}</Link>{c.status === "archived" && <Badge className="ml-2">Archived</Badge>}</TableCell>
+                <TableCell><Link href={`/client/${c.id}`} className="font-medium">{c.name}</Link>{c.status === "archived" && <Badge className="ml-2">{tc("archived")}</Badge>}</TableCell>
                 <TableCell className="text-muted-foreground">{c.timezone}</TableCell><TableCell className="text-muted-foreground">{c.currency}</TableCell>
               </TableRow>
             ))}

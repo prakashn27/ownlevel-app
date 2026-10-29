@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,8 @@ type Team = {
 
 export default function People() {
   const { client, label } = useClient();
+  const t = useTranslations();
+  const labelLower = label.toLowerCase();
   const [team, setTeam] = useState<Team | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -38,7 +41,7 @@ export default function People() {
     setPending(false);
     void load();
     if (!r.ok) return setError(r.error);
-    setNotice(`Invitation sent to ${r.data.email}`);
+    setNotice(t("common.invitationSent", { email: r.data.email }));
     form.reset();
   }
 
@@ -49,25 +52,25 @@ export default function People() {
 
   return (
     <>
-      <p className="mb-4 text-sm text-muted-foreground">People at this {label.toLowerCase()} who can sign in to its portal.</p>
+      <p className="mb-4 text-sm text-muted-foreground">{t("client.people.intro", { labelLower })}</p>
       {client.status === "archived" ? (
-        <p className="text-sm text-muted-foreground">This {label.toLowerCase()} is archived. Restore it in Settings to invite people.</p>
+        <p className="text-sm text-muted-foreground">{t("client.people.archivedNotice", { labelLower })}</p>
       ) : (
         <form onSubmit={invite} className="mb-4 flex items-center gap-2">
-          <Input name="email" type="email" placeholder="Email to invite" required />
+          <Input name="email" type="email" placeholder={t("common.emailToInvite")} required />
           <Select name="role" defaultValue="client_user">
             <SelectTrigger className="w-44 shrink-0"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="client_user">Client user</SelectItem>
-              <SelectItem value="client_admin">Client admin</SelectItem>
+              <SelectItem value="client_user">{t("client.people.clientUser")}</SelectItem>
+              <SelectItem value="client_admin">{t("client.people.clientAdmin")}</SelectItem>
             </SelectContent>
           </Select>
-          <Button disabled={pending}>Invite</Button>
+          <Button disabled={pending}>{t("common.invite")}</Button>
         </form>
       )}
       {error && <Alert variant="destructive">{error}</Alert>}
       {notice && <Alert variant="success">{notice}</Alert>}
-      {team && team.members.length === 0 && team.pending.length === 0 && <p className="text-muted-foreground">No one has access yet.</p>}
+      {team && team.members.length === 0 && team.pending.length === 0 && <p className="text-muted-foreground">{t("client.people.empty")}</p>}
       {team && team.members.length > 0 && (
         <Table><TableBody>
           {team.members.map((m) => <TableRow key={m.userId}><TableCell className="font-medium">{m.name}</TableCell><TableCell>{m.email}</TableCell><TableCell><Badge>{m.roleName}</Badge></TableCell></TableRow>)}
@@ -75,12 +78,12 @@ export default function People() {
       )}
       {team && team.pending.length > 0 && (
         <>
-          <h2>Pending invitations</h2>
+          <h2>{t("common.pendingInvitations")}</h2>
           <Table><TableBody>
             {team.pending.map((p) => (
               <TableRow key={p.id}>
                 <TableCell>{p.email}</TableCell><TableCell><Badge>{p.roleName}</Badge></TableCell>
-                <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => revoke(p.id)}>Revoke</Button></TableCell>
+                <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => revoke(p.id)}>{t("common.revoke")}</Button></TableCell>
               </TableRow>
             ))}
           </TableBody></Table>

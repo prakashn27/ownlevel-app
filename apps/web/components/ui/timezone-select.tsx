@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import * as Popover from "@radix-ui/react-popover";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ const ZONES = Intl.supportedValuesOf("timeZone");
 export function TimezoneSelect({
   name, defaultValue = "", emptyLabel, className,
 }: { name: string; defaultValue?: string; emptyLabel?: string; className?: string }) {
+  const t = useTranslations("timezone");
   const [value, setValue] = React.useState(defaultValue);
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState("");
@@ -36,7 +38,7 @@ export function TimezoneSelect({
           className,
         )}
       >
-        <span className="truncate">{value || emptyLabel || "Select timezone"}</span>
+        <span className="truncate">{value || emptyLabel || t("select")}</span>
         <ChevronDown className="size-4 shrink-0 opacity-50" />
       </Popover.Trigger>
       <Popover.Portal>
@@ -49,7 +51,7 @@ export function TimezoneSelect({
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search timezones…"
+            placeholder={t("search")}
             className="w-full border-b bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
           />
           <div className="max-h-64 overflow-y-auto p-1">
@@ -63,7 +65,7 @@ export function TimezoneSelect({
                 {z} {z === value && <Check className="size-4" />}
               </button>
             ))}
-            {matches.length === 0 && <p className="px-2 py-3 text-sm text-muted-foreground">No timezones found.</p>}
+            {matches.length === 0 && <p className="px-2 py-3 text-sm text-muted-foreground">{t("none")}</p>}
           </div>
         </Popover.Content>
       </Popover.Portal>
