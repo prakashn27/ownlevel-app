@@ -1,0 +1,6 @@
+[Unit]
+Description=Ownlevel worker pool
+# enable instances: systemctl enable --now ownlevel-worker@{1..2}.service
+
+[Install]
+WantedBy=multi-user.target

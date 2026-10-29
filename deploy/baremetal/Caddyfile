@@ -1,0 +1,21 @@
+# Web (Next.js) runs on Cloudflare Workers; this host serves only API + MCP.
+# Agency hostnames (slug and custom) terminate at Cloudflare and reach the API through the
+# web Worker's /api proxy, so no on-demand TLS is needed here.
+{
+	email ops@{$OWNLEVEL_DOMAIN}
+}
+
+api.{$OWNLEVEL_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:4000 {
+		health_uri /healthz
+		lb_try_duration 5s
+	}
+}
+
+mcp.{$OWNLEVEL_DOMAIN} {
+	reverse_proxy 127.0.0.1:4100 {
+		health_uri /healthz
+		flush_interval -1   # streaming (SSE / streamable HTTP)
+	}
+}

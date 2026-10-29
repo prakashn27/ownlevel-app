@@ -1,0 +1,28 @@
+[Unit]
+Description=Ownlevel worker %i (automations, agents, messaging, metering)
+After=network-online.target ownlevel-migrate.service
+Wants=network-online.target
+PartOf=ownlevel-worker.target
+
+[Service]
+User=ownlevel
+Group=ownlevel
+WorkingDirectory=/opt/ownlevel/current/apps/worker
+EnvironmentFile=/etc/ownlevel/common.env
+EnvironmentFile=/etc/ownlevel/worker.env
+Environment=NODE_ENV=production WORKER_ID=%i
+ExecStart=/usr/bin/node dist/main.js
+# let in-flight jobs finish before SIGKILL
+KillSignal=SIGTERM
+TimeoutStopSec=60
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=ownlevel-worker.target
