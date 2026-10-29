@@ -19,6 +19,14 @@ Text from the API (error messages, role names) and user data (agency/client name
 
 **Adding a language** (e.g. `fr`): add `"fr"` to `locales` in `apps/web/i18n/config.ts`, copy `messages/en.json` to `messages/fr.json` and translate values only (keep keys and `{params}`). Set the `NEXT_LOCALE` cookie to switch; a language picker is not built yet. Use `useFormatter`/`getFormatter` for dates and numbers rather than `toLocaleDateString()`.
 
+## Technical docs (`docs/technical/`)
+Read only the doc relevant to the task:
+- [1_Architecture.md](docs/technical/1_Architecture.md): stack choices, modular monolith layout, multi-tenancy (agency → client), RLS, database schema.
+- [2_Authentication.md](docs/technical/2_Authentication.md): authn/authz, memberships, roles/permissions, sessions, hostnames and custom domains, OAuth apps, MCP token authorization.
+- [3_Deployment.md](docs/technical/3_Deployment.md): Cloudflare Workers deployment (web, API, MCP), Hyperdrive, traffic routing, Host-based tenant resolution.
+- [4_MCP.md](docs/technical/4_MCP.md): MCP server, tool registry (`packages/ai/tools`), scopes, audit, distributing MCP to client contacts.
+- [8_Testing.md](docs/technical/8_Testing.md): RLS tests, API smoke script, manual and Workers runtime checks.
+
 ## Commits
 Always use [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, e.g. `feat(tenancy): add organizations RLS policies`.
 

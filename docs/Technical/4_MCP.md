@@ -15,6 +15,66 @@ Two layers, kept apart on purpose:
 
 Business rules live in `packages/core`. A tool is a thin call into a core function, the same function REST uses. Never build a second permission engine for MCP.
 
+## Architecture
+
+Three pieces cooperate. The MCP server only verifies tokens and runs tools; everything about identity lives in the API and web app.
+
+```mermaid
+flowchart TB
+  subgraph Client["MCP client (Claude, ChatGPT, Claude Code)"]
+    L[LLM]
+  end
+  subgraph Web["web Worker: app.ownlevel.app"]
+    P["proxy: /api/*, /.well-known/*"]
+    UI["login, agency picker, consent pages"]
+  end
+  subgraph API["API Worker: api.ownlevel.app"]
+    AS["Better Auth: OAuth 2.1 authorization server<br/>(jwt + mcp + cimd plugins)"]
+    SEL["POST /api/oauth/select-agency"]
+  end
+  subgraph MCP["MCP Worker: mcp.ownlevel.app"]
+    H["handler: tools/list, tools/call"]
+    V["jose: verify JWT, live membership check"]
+  end
+  R["tool registry<br/>packages/ai/tools"]
+  K["core services<br/>packages/core (requireRole, RLS)"]
+  DB[("Postgres via Hyperdrive")]
+
+  L -->|"1. discovery, authorize, token"| P
+  P --> AS
+  P --> UI
+  UI --> SEL
+  AS --> DB
+  L -->|"2. POST /mcp + Bearer JWT"| V
+  V -->|"keys"| AS
+  V --> H
+  H --> R
+  R --> K
+  K --> DB
+```
+
+| Piece | Code | Runs as | Job |
+| --- | --- | --- | --- |
+| Authorization server | `apps/api/src/auth.ts`, `cimd-fetch.ts`, `app.ts` | API Worker, reached through the web Worker | Registers clients (CIMD), authenticates the user, records the agency choice and consent, issues short-lived JWTs and refresh tokens |
+| Login, picker, consent UI | `apps/web/app/login`, `app/oauth/*` | web Worker | Browser steps of the OAuth flow |
+| MCP server | `apps/mcp-server` (`worker.ts`, `app.ts`, `handler.ts`, `oauth-auth.ts`) | MCP Worker | Verifies the token, lists and calls tools |
+| Tool registry | `packages/ai/tools` | imported by the MCP Worker | Declares each tool, its scope, level and permission |
+| Core services | `packages/core` | imported by API and MCP | Business rules and the role check, shared with REST |
+
+**What each layer decides**
+
+| Question | Decided by | When |
+| --- | --- | --- |
+| Who is this? Which agency? Which scopes? | Authorization server (user login, picker, consent) | Once, when the client connects |
+| Is the token genuine, for this server, unexpired? | MCP Worker (`jose`: signature, issuer, audience, expiry) | Every request |
+| Is the user still a member of that agency? | MCP Worker (`hasAgencyMembership`) | Every request |
+| Is the tool visible for this level and scope? | Tool registry (`visibleTools`, `findTool`) | `tools/list` and every `tools/call` |
+| May this user's role do it? | Core (`requireRole` inside an RLS-scoped transaction) | Every `tools/call` |
+
+A failure at any layer looks the same to the client (`Tool not found` or 401), so nothing leaks about which agencies or tools exist.
+
+**Runtimes.** Production is Cloudflare Workers only (see [3_Deployment.md](./3_Deployment.md)). Locally the same code runs two ways: plain Node (`pnpm dev`, fastest) or `wrangler dev` in the Workers runtime (`cf:dev`, closest to production). `src/app.ts` is shared by both; only the entry file differs (`server.ts` vs `worker.ts`).
+
 ## Who can call
 
 | Caller | Identity | Install level | Sees |
@@ -190,6 +250,18 @@ curl https://app.ownlevel.app/.well-known/oauth-authorization-server/api/auth   
 - Browser-based MCP clients need CORS on the MCP and OAuth endpoints; server-side connectors (Claude, ChatGPT) do not.
 - Single platform login host (no agency branding on the OAuth login page), the consent page does not show the picked agency, and there is no per-installation revoke or audit trail yet.
 
+## Testing overview
+
+| What | Local | Production |
+| --- | --- | --- |
+| Is it up and routed correctly? | `curl localhost:4100/healthz` | `curl https://mcp.ownlevel.app/healthz` |
+| Does auth reject bad callers? | curl with no token, garbage token | same, against `mcp.ownlevel.app` |
+| Does the whole OAuth flow work? | `pnpm --filter @ownlevel/mcp-server test:oauth` (scripted browser + client) | A real client (Claude Code, Claude, ChatGPT) |
+| Does the tool change data? | Query Postgres in Docker | Check the agency in the app or the database |
+| Runtime fidelity | `cf:dev` runs the Worker in `workerd` | The real Worker |
+
+Order to follow: local scripted test, then local with a real client, then production smoke checks, then production with a real client. Details below.
+
 ## Testing locally with a real LLM client
 
 Two ways to authenticate locally. Use OAuth to test the real flow; use the dev token for quick `curl` checks.
@@ -281,6 +353,67 @@ curl -s localhost:4100/mcp \
 ```
 
 Tests change real rows in your local database, so note the old color first and set it back afterwards.
+
+## Testing in production
+
+Do these in order. Steps 1 to 3 are read-only; step 4 changes one agency setting, so use a test agency or note the old color and set it back.
+
+**1. Deployment is routed to the right Worker**
+
+```bash
+curl https://mcp.ownlevel.app/healthz     # expect: ok  (an HTML 404 page means the request hit the web Worker: see Troubleshooting)
+curl -i -X POST https://mcp.ownlevel.app/mcp -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+# expect: 401 and  WWW-Authenticate: Bearer resource_metadata="https://mcp.ownlevel.app/.well-known/oauth-protected-resource/mcp", scope="agency:settings"
+```
+
+**2. Discovery chain is consistent**
+
+```bash
+curl https://mcp.ownlevel.app/.well-known/oauth-protected-resource/mcp
+#   "resource": "https://mcp.ownlevel.app/mcp", "authorization_servers": ["https://app.ownlevel.app/api/auth"]
+curl https://app.ownlevel.app/.well-known/oauth-authorization-server/api/auth
+#   "issuer" matches the line above; has "client_id_metadata_document_supported": true;
+#   has NO "registration_endpoint" (open registration must stay off)
+curl https://app.ownlevel.app/api/auth/jwks      # a non-empty "keys" array
+```
+
+**3. Bad tokens are rejected**
+
+```bash
+curl -i -X POST https://mcp.ownlevel.app/mcp -H 'authorization: Bearer garbage' \
+  -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -d '{}'
+# expect 401 with error="invalid_token" in WWW-Authenticate
+```
+
+**4. Real client, end to end**
+
+1. Add the server: `claude mcp add --transport http ownlevel https://mcp.ownlevel.app/mcp`, then run `/mcp` and choose Authenticate. (In Claude or ChatGPT, add a custom connector with that URL.)
+2. In the browser: sign in at `app.ownlevel.app`, pick the agency, approve the consent screen. You return to the client, which now lists the tool.
+3. Ask: "Set my agency's brand color to #0ea5e9."
+4. Confirm: the agency's color changed in the app, or `select slug, branding from agencies where slug = '<slug>';`.
+5. Negative checks: sign in as an `agency_user` (not owner or admin) and repeat; the tool must answer "not found" and the color must stay. Remove the member from the agency and call again with the old token; it must return 401.
+
+**5. Logs while testing**
+
+```bash
+pnpm --filter @ownlevel/mcp-server exec wrangler tail          # MCP Worker: one `audit user=... tool=... ok|error` line per call
+pnpm --filter @ownlevel/api exec wrangler tail --format pretty # API Worker: OAuth endpoints
+```
+
+**Rolling back.** `pnpm --filter @ownlevel/mcp-server exec wrangler rollback` returns the MCP Worker to its previous version; the API and web Workers have their own rollbacks. Database changes are not rolled back.
+
+**Troubleshooting**
+
+| Symptom | Likely cause |
+| --- | --- |
+| `/healthz` returns an HTML "404: This page could not be found" | The `mcp` DNS record is missing or not proxied, or the MCP Worker is not deployed, so the web Worker's wildcard route answered. |
+| `/mcp` returns 401 even after signing in, error `invalid_token` | Audience or issuer mismatch: `MCP_PUBLIC_URL` and `OAUTH_ISSUER` must be identical on the API and MCP Workers. Or the API's keys changed and the Worker has a stale key set (redeploy or wait for the key cache). |
+| Authorization loops back to the login page | The authorization server is not on the platform origin (`BETTER_AUTH_URL` must be `https://app.ownlevel.app`), so it cannot see the session cookie. |
+| Client cannot register, no `client_id_metadata_document_supported` in the metadata | The API Worker has not been redeployed with CIMD enabled, or `OAUTH_CIMD=0` is set. |
+| `invalid_redirect_uri` on registration | A client with a loopback redirect is not sending `application_type: "native"` (dynamic registration, local only). |
+| Tool call returns "Tool not found" for the owner | The token lacks the `agency:settings` scope (the client did not request it), or the member's role is not owner or admin. |
+| 401 right after a team change | Expected: membership is re-checked on every request. |
 
 ## Distributing MCP to contacts
 
