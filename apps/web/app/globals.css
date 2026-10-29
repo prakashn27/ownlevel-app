@@ -13,11 +13,21 @@ a { color: var(--brand); }
 .hint { color: #666; font-size: .85rem; margin: 0; }
 .brand { display: flex; align-items: center; gap: .5rem; padding: .75rem 1.25rem; border-bottom: 1px solid #eee; }
 .narrow { max-width: 360px; margin: 3rem auto; padding: 0 1rem; }
-.shell { display: flex; min-height: calc(100vh - 53px); }
+.shell { display: flex; min-height: calc(100vh - 53px - 37px); }
 .shell nav { width: 200px; padding: 1rem; border-right: 1px solid #eee; display: flex; flex-direction: column; gap: .25rem; }
 .shell nav a { padding: .5rem .75rem; border-radius: 6px; text-decoration: none; color: #111; }
 .shell nav a.active { background: color-mix(in srgb, var(--brand) 12%, white); color: var(--brand); font-weight: 600; }
 .shell nav .spacer { flex: 1; }
+.badge { font-size: .75rem; font-weight: 500; margin-left: .5rem; padding: .1rem .5rem; border-radius: 999px; background: #eee; color: #555; vertical-align: middle; }
+/* Agency vs client view: the bar and sidebar make it obvious what a change applies to. */
+.context-bar { display: flex; align-items: center; gap: .75rem; padding: .5rem 1rem; font-size: .875rem; border-bottom: 1px solid #eee; background: #f4f4f5; color: #333; }
+.context-kind { text-transform: uppercase; letter-spacing: .05em; font-size: .7rem; font-weight: 700; padding: .15rem .5rem; border-radius: 4px; background: #e4e4e7; }
+.context-note { margin-left: auto; opacity: .8; }
+.client-mode .context-bar { background: var(--brand); color: #fff; border-color: var(--brand); }
+.client-mode .context-kind { background: rgba(255, 255, 255, .2); }
+.client-mode .context-bar .badge { background: rgba(255, 255, 255, .25); color: #fff; }
+.client-mode .shell nav { background: color-mix(in srgb, var(--brand) 5%, white); border-right-color: color-mix(in srgb, var(--brand) 25%, white); }
+.shell nav a.back { color: #555; font-size: .875rem; }
 .shell main { flex: 1; padding: 1.5rem 2rem; max-width: 760px; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #eee; }
