@@ -2,6 +2,11 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ownlevel-marketing",
   "compatibility_date": "2025-01-01",
+  // Custom domains take precedence over the web Worker's `*.ownlevel.app/*` and `*/*` routes.
+  "routes": [
+    { "pattern": "ownlevel.app", "custom_domain": true },
+    { "pattern": "www.ownlevel.app", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./dist",
     "not_found_handling": "404-page"
