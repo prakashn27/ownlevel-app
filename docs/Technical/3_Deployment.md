@@ -56,7 +56,7 @@ flowchart LR
 **Deploy runbook**
 
 1. In Cloudflare, create the single zone `ownlevel.app` (platform `app`, `api`, `mcp`, agency slugs, SaaS fallback).
-2. API host env: `PLATFORM_ROOT_DOMAIN=ownlevel.app`, `PLATFORM_HOSTS=app.ownlevel.app`, `PROXY_SHARED_SECRET`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://api.ownlevel.app`, `RESEND_API_KEY`, `EMAIL_FROM`. Run migrations, then start the API.
+2. API host env: `PLATFORM_ROOT_DOMAIN=ownlevel.app`, `PLATFORM_HOSTS=app.ownlevel.app`, `PROXY_SHARED_SECRET`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://app.ownlevel.app` (the platform origin, see [4_MCP.md](./4_MCP.md#production)), `MCP_PUBLIC_URL=https://mcp.ownlevel.app/mcp`, `RESEND_API_KEY`, `EMAIL_FROM`. Run migrations, then start the API.
 3. In `apps/web`: `pnpm wrangler login`, then `pnpm wrangler secret put PROXY_SHARED_SECRET`.
 4. DNS: in `ownlevel.app`: `app`, `*` and `domains` (proxied), and `api` (DNS-only, pointing at the API host). The records can point at a dummy address (`100::`) because the Worker route answers before any origin is contacted.
 5. `NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN=ownlevel.app pnpm --filter @ownlevel/web cf:deploy`.
