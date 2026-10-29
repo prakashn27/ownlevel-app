@@ -6,8 +6,10 @@ import {
   memberships,
   roles,
   user,
+  withTenant,
   type Branding,
   type Db,
+  type Tx,
 } from "../../db/index.js";
 import { DomainError } from "../../errors.js";
 
@@ -15,9 +17,11 @@ export const hashToken = (t: string) => createHash("sha256").update(t).digest("h
 const INVITE_TTL_MS = 7 * 24 * 3600 * 1000;
 const INVITABLE = ["agency_admin", "agency_user"] as const;
 
-/** Agency-level membership check. Throws forbidden unless the user holds one of `allowed` roles. */
-export async function requireAgencyRole(db: Db, userId: string, agencyId: string, allowed: string[]) {
-  const [m] = await db
+type Scope = { userId: string; agencyId: string };
+
+/** Agency-level membership check inside a tenant transaction. Throws forbidden unless the user holds one of `allowed` roles. */
+async function requireRole(tx: Tx, userId: string, agencyId: string, allowed: string[]) {
+  const [m] = await tx
     .select({ role: roles.key })
     .from(memberships)
     .innerJoin(roles, eq(roles.id, memberships.roleId))
@@ -26,12 +30,17 @@ export async function requireAgencyRole(db: Db, userId: string, agencyId: string
   return m.role;
 }
 
+export const requireAgencyRole = (db: Db, ctx: Scope, allowed: string[]) =>
+  withTenant(db, ctx, (tx) => requireRole(tx, ctx.userId, ctx.agencyId, allowed));
+
 export async function hasAgencyMembership(db: Db, userId: string, agencyId: string) {
-  const [m] = await db
-    .select({ id: memberships.id })
-    .from(memberships)
-    .where(and(eq(memberships.userId, userId), eq(memberships.agencyId, agencyId), isNull(memberships.clientId)));
-  return !!m;
+  return withTenant(db, { agencyId, userId }, async (tx) => {
+    const [m] = await tx
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(and(eq(memberships.userId, userId), eq(memberships.agencyId, agencyId), isNull(memberships.clientId)));
+    return !!m;
+  });
 }
 
 // ── Branding ──
@@ -65,22 +74,25 @@ export function parseBranding(input: Record<string, unknown>): Branding {
 }
 
 export async function updateBranding(db: Db, ctx: { userId: string; agencyId: string }, input: Record<string, unknown>) {
-  await requireAgencyRole(db, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin"]);
   const branding = parseBranding(input);
-  await db.update(agencies).set({ branding }).where(eq(agencies.id, ctx.agencyId));
-  return branding;
+  return withTenant(db, ctx, async (tx) => {
+    await requireRole(tx, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin"]);
+    await tx.update(agencies).set({ branding }).where(eq(agencies.id, ctx.agencyId));
+    return branding;
+  });
 }
 
 // ── Team + invitations ──
-export async function getTeam(db: Db, ctx: { userId: string; agencyId: string }) {
-  await requireAgencyRole(db, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin", "agency_user"]);
-  const members = await db
+export const getTeam = (db: Db, ctx: Scope) =>
+  withTenant(db, ctx, async (tx) => {
+  await requireRole(tx, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin", "agency_user"]);
+  const members = await tx
     .select({ userId: user.id, name: user.name, email: user.email, role: roles.key, roleName: roles.name })
     .from(memberships)
     .innerJoin(user, eq(user.id, memberships.userId))
     .innerJoin(roles, eq(roles.id, memberships.roleId))
     .where(and(eq(memberships.agencyId, ctx.agencyId), isNull(memberships.clientId)));
-  const pending = await db
+  const pending = await tx
     .select({ id: invitations.id, email: invitations.email, role: roles.key, roleName: roles.name, expiresAt: invitations.expiresAt })
     .from(invitations)
     .innerJoin(roles, eq(roles.id, invitations.roleId))
@@ -95,32 +107,29 @@ export async function getTeam(db: Db, ctx: { userId: string; agencyId: string })
     )
     .orderBy(desc(invitations.createdAt));
   return { members, pending };
-}
+  });
 
-export async function createInvitation(
-  db: Db,
-  ctx: { userId: string; agencyId: string },
-  input: { email: string; roleKey: string },
-) {
-  const inviterRole = await requireAgencyRole(db, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin"]);
+export async function createInvitation(db: Db, ctx: Scope, input: { email: string; roleKey: string }) {
   const email = input.email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new DomainError("invalid_input", "Enter a valid email address.");
   if (!(INVITABLE as readonly string[]).includes(input.roleKey)) throw new DomainError("invalid_input", "Invalid role.");
+  const token = randomBytes(32).toString("base64url");
+  return withTenant(db, ctx, async (tx) => {
+  const inviterRole = await requireRole(tx, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin"]);
   if (inviterRole === "agency_admin" && input.roleKey !== "agency_user")
     throw new DomainError("forbidden", "Admins can only invite roles below their own.");
 
-  const [role] = await db.select().from(roles).where(and(isNull(roles.agencyId), eq(roles.key, input.roleKey)));
+  const [role] = await tx.select().from(roles).where(and(isNull(roles.agencyId), eq(roles.key, input.roleKey)));
   if (!role) throw new DomainError("invalid_input", "Role is not available.");
 
-  const [existing] = await db
+  const [existing] = await tx
     .select({ id: memberships.id })
     .from(memberships)
     .innerJoin(user, eq(user.id, memberships.userId))
     .where(and(eq(memberships.agencyId, ctx.agencyId), isNull(memberships.clientId), sql`lower(${user.email}) = ${email}`));
   if (existing) throw new DomainError("invalid_input", "That person is already on your team.");
 
-  const token = randomBytes(32).toString("base64url");
-  await db.transaction(async (tx) => {
+  {
     await tx
       .update(invitations)
       .set({ revokedAt: new Date() })
@@ -133,22 +142,25 @@ export async function createInvitation(
       invitedBy: ctx.userId,
       expiresAt: new Date(Date.now() + INVITE_TTL_MS),
     });
-  });
+  }
   return { token, email, roleName: role.name };
+  });
 }
 
-export async function revokeInvitation(db: Db, ctx: { userId: string; agencyId: string }, invitationId: string) {
-  await requireAgencyRole(db, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin"]);
-  const res = await db
-    .update(invitations)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(invitations.id, invitationId), eq(invitations.agencyId, ctx.agencyId), isNull(invitations.acceptedAt)))
-    .returning({ id: invitations.id });
-  if (res.length === 0) throw new DomainError("not_found", "Invitation not found.");
+export async function revokeInvitation(db: Db, ctx: Scope, invitationId: string) {
+  await withTenant(db, ctx, async (tx) => {
+    await requireRole(tx, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin"]);
+    const res = await tx
+      .update(invitations)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(invitations.id, invitationId), eq(invitations.agencyId, ctx.agencyId), isNull(invitations.acceptedAt)))
+      .returning({ id: invitations.id });
+    if (res.length === 0) throw new DomainError("not_found", "Invitation not found.");
+  });
 }
 
-async function findUsableInvite(db: Db, agencyId: string, token: string) {
-  const [inv] = await db
+async function findUsableInvite(tx: Tx, agencyId: string, token: string) {
+  const [inv] = await tx
     .select({
       id: invitations.id,
       email: invitations.email,
@@ -169,17 +181,18 @@ async function findUsableInvite(db: Db, agencyId: string, token: string) {
 }
 
 /** Public preview for the accept page; scoped to the host's agency. */
-export async function previewInvitation(db: Db, agencyId: string, token: string) {
-  const inv = await findUsableInvite(db, agencyId, token);
-  const [u] = await db.select({ id: user.id }).from(user).where(sql`lower(${user.email}) = ${inv.email}`);
-  return { email: inv.email, roleName: inv.roleName, hasAccount: !!u };
-}
+export const previewInvitation = (db: Db, agencyId: string, token: string) =>
+  withTenant(db, { agencyId }, async (tx) => {
+    const inv = await findUsableInvite(tx, agencyId, token);
+    const [u] = await tx.select({ id: user.id }).from(user).where(sql`lower(${user.email}) = ${inv.email}`);
+    return { email: inv.email, roleName: inv.roleName, hasAccount: !!u };
+  });
 
 export async function acceptInvitation(db: Db, ctx: { userId: string; userEmail: string; agencyId: string }, token: string) {
-  const inv = await findUsableInvite(db, ctx.agencyId, token);
-  if (inv.email !== ctx.userEmail.toLowerCase())
-    throw new DomainError("forbidden", `This invitation was sent to ${inv.email}. Sign in with that email.`);
-  await db.transaction(async (tx) => {
+  await withTenant(db, { agencyId: ctx.agencyId, userId: ctx.userId }, async (tx) => {
+    const inv = await findUsableInvite(tx, ctx.agencyId, token);
+    if (inv.email !== ctx.userEmail.toLowerCase())
+      throw new DomainError("forbidden", `This invitation was sent to ${inv.email}. Sign in with that email.`);
     await tx
       .insert(memberships)
       .values({

@@ -1,4 +1,4 @@
-import { usageEvents, type Db } from "../../db/index.js";
+import { usageEvents, withTenant, type Db } from "../../db/index.js";
 
 export type EmailMessage = { from: string; to: string; subject: string; text: string; html?: string };
 /** Delivery is injected by the adapter (Resend, SES, console in dev). */
@@ -14,12 +14,14 @@ export async function sendEmail(
   msg: EmailMessage,
 ) {
   await transport(msg);
-  await db.insert(usageEvents).values({
-    agencyId: scope.agencyId,
-    clientId: scope.clientId ?? null,
-    meter: "email.sent",
-    quantity: "1",
-  });
+  await withTenant(db, { agencyId: scope.agencyId }, (tx) =>
+    tx.insert(usageEvents).values({
+      agencyId: scope.agencyId,
+      clientId: scope.clientId ?? null,
+      meter: "email.sent",
+      quantity: "1",
+    }),
+  );
 }
 
 function layout(appName: string, body: string, cta: { label: string; url: string }) {

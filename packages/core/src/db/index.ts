@@ -8,3 +8,4 @@ export type Db = NodePgDatabase<typeof schema>;
 export * from "./auth-schema.js";
 export * from "./tenancy-schema.js";
 export * from "./usage-schema.js";
+export * from "./tenant.js";

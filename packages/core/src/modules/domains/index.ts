@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { parseHost, type HostConfig } from "@ownlevel/tenancy";
-import { agencies, agencyDomains, type Branding, type Db } from "../../db/index.js";
+import { agencies, agencyDomains, withTenant, type Branding, type Db } from "../../db/index.js";
 
 export type ResolvedHost =
   | { kind: "platform" }
@@ -10,7 +10,9 @@ export type ResolvedHost =
 export async function resolveHost(db: Db, rawHost: string, cfg: HostConfig): Promise<ResolvedHost | null> {
   const parsed = parseHost(rawHost, cfg);
   if (parsed.kind === "platform") return { kind: "platform" };
-  const [row] = await db
+  // Narrow resolver context: RLS exposes only the active row for this exact hostname.
+  const [row] = await withTenant(db, { host: parsed.host }, (tx) =>
+    tx
     .select({
       agencyId: agencies.id,
       name: agencies.name,
@@ -20,7 +22,7 @@ export async function resolveHost(db: Db, rawHost: string, cfg: HostConfig): Pro
     })
     .from(agencyDomains)
     .innerJoin(agencies, eq(agencies.id, agencyDomains.agencyId))
-    .where(and(eq(agencyDomains.hostname, parsed.host), eq(agencyDomains.status, "active")));
+    .where(and(eq(agencyDomains.hostname, parsed.host), eq(agencyDomains.status, "active"))));
   if (!row || row.status !== "active") return null;
   return { kind: "agency", agencyId: row.agencyId, name: row.name, slug: row.slug, branding: row.branding, hostname: parsed.host };
 }
