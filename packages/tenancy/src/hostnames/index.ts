@@ -31,7 +31,7 @@ export function normalizeHost(host: string): string {
 export type HostConfig = {
   /** e.g. "ownlevel.app" (prod) or "localhost" (dev). Agencies live at {slug}.{rootDomain}. */
   rootDomain: string;
-  /** Hosts that serve the platform itself (signup for agency owners), e.g. "app.ownlevel.com", "localhost". */
+  /** Hosts that serve the platform itself (signup for agency owners), e.g. "app.ownlevel.app", "localhost". */
   platformHosts: string[];
 };
 

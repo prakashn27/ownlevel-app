@@ -158,11 +158,11 @@ Use `--resolve`, not `-H "Host: …"`; `workerd` builds the request from the URL
 
 | Check | Expected |
 | --- | --- |
-| `https://app.ownlevel.com/signup` | 200 |
+| `https://app.ownlevel.app/signup` | 200 |
 | `https://<slug>.ownlevel.app/login` | Agency branding |
 | `https://<unknown>.ownlevel.app/login` | "Not found" |
 | `https://<slug>.ownlevel.app/api/host` | JSON for that agency (proves the proxy and secret are wired) |
-| `https://api.ownlevel.com/api/host` with a forged `x-forwarded-host` | Platform, not the agency |
+| `https://api.ownlevel.app/api/host` with a forged `x-forwarded-host` | Platform, not the agency |
 
 ## 7. Pitfalls we hit
 

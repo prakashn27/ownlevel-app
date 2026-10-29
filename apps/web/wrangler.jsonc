@@ -9,14 +9,15 @@
 
   // Non-secret runtime config. PROXY_SHARED_SECRET is a secret: `wrangler secret put PROXY_SHARED_SECRET`.
   "vars": {
-    "API_URL": "https://api.ownlevel.com"
+    "API_URL": "https://api.ownlevel.app"
   },
 
   // One Worker serves every hostname; the tenant is resolved from Host at request time.
   "routes": [
-    // Platform host (agency-owner signup) — zone ownlevel.com
-    { "pattern": "app.ownlevel.com/*", "zone_name": "ownlevel.com" },
-    // Agency subdomains {slug}.ownlevel.app — needs a proxied wildcard DNS record `*` in zone ownlevel.app
+    // Platform host (agency-owner signup) — app.ownlevel.app
+    { "pattern": "app.ownlevel.app/*", "zone_name": "ownlevel.app" },
+    // Agency subdomains {slug}.ownlevel.app — needs a proxied wildcard DNS record `*` in zone ownlevel.app.
+    // This also matches api.ownlevel.app: keep the `api` DNS record DNS-only (grey cloud) so traffic goes to the API origin, not this Worker.
     { "pattern": "*.ownlevel.app/*", "zone_name": "ownlevel.app" },
     // Custom agency domains arrive through Cloudflare for SaaS (fallback origin in zone ownlevel.app).
     // Verify against Cloudflare's "Workers as origin for custom hostnames" docs before relying on this.

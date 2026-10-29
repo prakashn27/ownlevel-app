@@ -24,7 +24,8 @@ Every agency gets `{slug}.ownlevel.app` and may add custom domains (see the Auth
 
 | Hostname | DNS | Certificate |
 | --- | --- | --- |
-| `app.ownlevel.com` | A / CNAME to the edge | Normal certificate |
+| `app.ownlevel.app` | Proxied record in the `ownlevel.app` zone, served by the web Worker | Universal SSL (covered by `*.ownlevel.app`) |
+| `api.ownlevel.app` | **DNS-only** A record to the API host (Caddy terminates TLS) | Caddy / Let's Encrypt |
 | `*.ownlevel.app` | Proxied wildcard `*` record in the `ownlevel.app` zone, served by the web Worker | Cloudflare Universal SSL covers `*.ownlevel.app` (one label), so flat slugs need no extra certificate |
 | `app.youragency.com` (custom) | Agency CNAME to `domains.ownlevel.app` | Cloudflare for SaaS Custom Hostnames (registered by the domain worker after TXT verification) |
 
@@ -44,7 +45,7 @@ The Next.js app (`apps/web`) runs as one Worker, built with `@opennextjs/cloudfl
 ```mermaid
 flowchart LR
   B[Browser on any agency host] --> W[Cloudflare Worker: apps/web]
-  W -->|"/api/*  + X-Forwarded-Host + secret"| API[api.ownlevel.com via Caddy]
+  W -->|"/api/*  + X-Forwarded-Host + secret"| API[api.ownlevel.app via Caddy]
   W -->|everything else| N[Next.js pages]
 ```
 
@@ -54,12 +55,12 @@ flowchart LR
 
 **Deploy runbook**
 
-1. In Cloudflare, create the zones `ownlevel.com` (platform, `api`, `mcp`) and `ownlevel.app` (agency slugs, SaaS fallback).
-2. API host env: `PLATFORM_ROOT_DOMAIN=ownlevel.app`, `PLATFORM_HOSTS=app.ownlevel.com`, `PROXY_SHARED_SECRET`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://api.ownlevel.com`, `RESEND_API_KEY`, `EMAIL_FROM`. Run migrations, then start the API.
+1. In Cloudflare, create the single zone `ownlevel.app` (platform `app`, `api`, `mcp`, agency slugs, SaaS fallback).
+2. API host env: `PLATFORM_ROOT_DOMAIN=ownlevel.app`, `PLATFORM_HOSTS=app.ownlevel.app`, `PROXY_SHARED_SECRET`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://api.ownlevel.app`, `RESEND_API_KEY`, `EMAIL_FROM`. Run migrations, then start the API.
 3. In `apps/web`: `pnpm wrangler login`, then `pnpm wrangler secret put PROXY_SHARED_SECRET`.
-4. DNS: `app` (proxied) in `ownlevel.com`; `*` (proxied) and `domains` in `ownlevel.app`. The records can point at a dummy address (`100::`) because the Worker route answers before any origin is contacted.
+4. DNS: in `ownlevel.app`: `app`, `*` and `domains` (proxied), and `api` (DNS-only, pointing at the API host). The records can point at a dummy address (`100::`) because the Worker route answers before any origin is contacted.
 5. `NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN=ownlevel.app pnpm --filter @ownlevel/web cf:deploy`.
-6. Smoke test (see [8_Testing.md](./8_Testing.md)): `app.ownlevel.com/signup` works, a new agency's `{slug}.ownlevel.app/login` shows its branding, and an unknown slug returns "Not found".
+6. Smoke test (see [8_Testing.md](./8_Testing.md)): `app.ownlevel.app/signup` works, a new agency's `{slug}.ownlevel.app/login` shows its branding, and an unknown slug returns "Not found".
 7. Custom domains: enable Cloudflare for SaaS on `ownlevel.app`, set the fallback origin to `domains.ownlevel.app`, and give the domain worker an API token that can manage Custom Hostnames. Check Cloudflare's "Workers as origin for custom hostnames" guidance for the `*/*` route in `wrangler.jsonc`.
 
 **Local preview in the Workers runtime:** `pnpm --filter @ownlevel/web cf:preview` (uses the `preview` environment with no routes, because `wrangler dev` otherwise rewrites `Host` to the first route's hostname and breaks tenant resolution).

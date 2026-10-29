@@ -96,7 +96,7 @@ The agency is resolved from the hostname before login, so every agency's portal 
 | --- | --- | --- |
 | `app.youragency.com` (custom domain) | Agency A | A's branding, A's allowed methods and SSO |
 | `{slug}.ownlevel.app` (platform subdomain, e.g. `a.ownlevel.app`) | The agency that owns `{slug}` | Same as above |
-| `app.ownlevel.com` | Platform | Ownlevel branding; for agency owners and multi-agency users |
+| `app.ownlevel.app` | Platform | Ownlevel branding; for agency owners and multi-agency users |
 
 After login on an agency host, show only memberships where `agency_id` matches that host. A user who also works for agency B never sees B's name on A's domain.
 
@@ -220,7 +220,7 @@ Do not delete the DNS records afterwards. If the TXT or CNAME disappears, the do
 **Per domain (automated)**
 
 1. `POST /domains`: the domain service takes `agency_id` from the session, never from the body. It validates the hostname, then stores a `pending` row with a random `verification_token`.
-2. Validation rejects: apex domains, anything under `ownlevel.app` / `ownlevel.com`, IP addresses, and hostnames already claimed by another agency.
+2. Validation rejects: apex domains, anything under `ownlevel.app`, IP addresses, and hostnames already claimed by another agency.
 3. The worker resolves the TXT and CNAME records. On a match it sets `verified` and requests the certificate.
 4. When the certificate is issued it sets `active`, clears the resolver cache and writes `audit_log` (`domains:activate`).
 5. Every 6 hours the worker re-verifies active domains. After 3 consecutive failures it sets the domain to `failed` and notifies agency owners by email, which prevents subdomain takeover.
