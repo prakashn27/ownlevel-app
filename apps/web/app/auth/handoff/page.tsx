@@ -1,6 +1,7 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { AuthCard } from "../../../components/auth-card";
 import { authClient } from "../../../lib/auth-client";
 
 // Exchanges a one-time token (minted on the platform host) for a session on this host.
@@ -21,5 +22,5 @@ function Handoff() {
 }
 
 export default function Page() {
-  return <div className="narrow"><Suspense><Handoff /></Suspense></div>;
+  return <AuthCard><Suspense><Handoff /></Suspense></AuthCard>;
 }

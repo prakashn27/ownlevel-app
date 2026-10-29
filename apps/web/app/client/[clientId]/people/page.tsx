@@ -1,5 +1,12 @@
 "use client";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Table, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { api } from "../../../../lib/api";
 import { useClient } from "../client-workspace";
 
@@ -42,38 +49,41 @@ export default function People() {
 
   return (
     <>
-      <p className="hint">People at this {label.toLowerCase()} who can sign in to its portal.</p>
+      <p className="mb-4 text-sm text-muted-foreground">People at this {label.toLowerCase()} who can sign in to its portal.</p>
       {client.status === "archived" ? (
-        <p className="hint">This {label.toLowerCase()} is archived. Restore it in Settings to invite people.</p>
+        <p className="text-sm text-muted-foreground">This {label.toLowerCase()} is archived. Restore it in Settings to invite people.</p>
       ) : (
-        <form onSubmit={invite} className="row" style={{ flexDirection: "row" }}>
-          <input name="email" type="email" placeholder="Email to invite" required />
-          <select name="role" defaultValue="client_user">
-            <option value="client_user">Client user</option>
-            <option value="client_admin">Client admin</option>
-          </select>
-          <button disabled={pending}>Invite</button>
+        <form onSubmit={invite} className="mb-4 flex items-center gap-2">
+          <Input name="email" type="email" placeholder="Email to invite" required />
+          <Select name="role" defaultValue="client_user">
+            <SelectTrigger className="w-44 shrink-0"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="client_user">Client user</SelectItem>
+              <SelectItem value="client_admin">Client admin</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button disabled={pending}>Invite</Button>
         </form>
       )}
-      {error && <p className="error">{error}</p>}
-      {notice && <p className="ok">{notice}</p>}
-      {team && team.members.length === 0 && team.pending.length === 0 && <p>No one has access yet.</p>}
+      {error && <Alert variant="destructive">{error}</Alert>}
+      {notice && <Alert variant="success">{notice}</Alert>}
+      {team && team.members.length === 0 && team.pending.length === 0 && <p className="text-muted-foreground">No one has access yet.</p>}
       {team && team.members.length > 0 && (
-        <table><tbody>
-          {team.members.map((m) => <tr key={m.userId}><td>{m.name}</td><td>{m.email}</td><td>{m.roleName}</td></tr>)}
-        </tbody></table>
+        <Table><TableBody>
+          {team.members.map((m) => <TableRow key={m.userId}><TableCell className="font-medium">{m.name}</TableCell><TableCell>{m.email}</TableCell><TableCell><Badge>{m.roleName}</Badge></TableCell></TableRow>)}
+        </TableBody></Table>
       )}
       {team && team.pending.length > 0 && (
         <>
           <h2>Pending invitations</h2>
-          <table><tbody>
+          <Table><TableBody>
             {team.pending.map((p) => (
-              <tr key={p.id}>
-                <td>{p.email}</td><td>{p.roleName}</td>
-                <td><button className="secondary" onClick={() => revoke(p.id)}>Revoke</button></td>
-              </tr>
+              <TableRow key={p.id}>
+                <TableCell>{p.email}</TableCell><TableCell><Badge>{p.roleName}</Badge></TableCell>
+                <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => revoke(p.id)}>Revoke</Button></TableCell>
+              </TableRow>
             ))}
-          </tbody></table>
+          </TableBody></Table>
         </>
       )}
     </>

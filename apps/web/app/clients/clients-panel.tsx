@@ -1,8 +1,15 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { api } from "../../lib/api";
-import { TimezoneOptions } from "./timezone-options";
+import { TimezoneSelect } from "@/components/ui/timezone-select";
 
 type Client = { id: string; name: string; timezone: string; currency: string; status: string };
 
@@ -34,29 +41,32 @@ export function ClientsPanel({ label }: { label: string }) {
   return (
     <>
       <h1>{label}s</h1>
-      <form onSubmit={create}>
-        <h2>New {label.toLowerCase()}</h2>
-        <label>Name<input name="name" required maxLength={120} /></label>
-        <span className="row">
-          <label>Timezone<input name="timezone" list="timezones" placeholder="Agency default" /></label>
-          <label>Currency<input name="currency" placeholder="Agency default" maxLength={3} /></label>
-        </span>
-        <TimezoneOptions />
-        <button disabled={pending}>Create {label.toLowerCase()}</button>
-      </form>
-      {error && <p className="error">{error}</p>}
-      {clients && clients.length === 0 && <p>No {label.toLowerCase()}s yet.</p>}
+      <Card className="mb-6">
+        <CardHeader><CardTitle>New {label.toLowerCase()}</CardTitle></CardHeader>
+        <CardContent>
+          <form onSubmit={create} className="flex flex-col gap-4">
+            <Label>Name<Input name="name" required maxLength={120} /></Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Label>Timezone<TimezoneSelect name="timezone" emptyLabel="Agency default" /></Label>
+              <Label>Currency<Input name="currency" placeholder="Agency default" maxLength={3} /></Label>
+            </div>
+            <div><Button disabled={pending}>Create {label.toLowerCase()}</Button></div>
+          </form>
+        </CardContent>
+      </Card>
+      {error && <Alert variant="destructive">{error}</Alert>}
+      {clients && clients.length === 0 && <p className="text-muted-foreground">No {label.toLowerCase()}s yet.</p>}
       {clients && clients.length > 0 && (
-        <table>
-          <tbody>
+        <Table>
+          <TableBody>
             {clients.map((c) => (
-              <tr key={c.id}>
-                <td><Link href={`/client/${c.id}`}>{c.name}</Link>{c.status === "archived" && <span className="badge">Archived</span>}</td>
-                <td>{c.timezone}</td><td>{c.currency}</td>
-              </tr>
+              <TableRow key={c.id}>
+                <TableCell><Link href={`/client/${c.id}`} className="font-medium">{c.name}</Link>{c.status === "archived" && <Badge className="ml-2">Archived</Badge>}</TableCell>
+                <TableCell className="text-muted-foreground">{c.timezone}</TableCell><TableCell className="text-muted-foreground">{c.currency}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
     </>
   );

@@ -1,6 +1,11 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
 import { api } from "../../../lib/api";
 
 type Branding = { appName?: string; logoUrl?: string; primaryColor?: string; clientLabel?: string };
@@ -31,33 +36,35 @@ export function BrandingForm({ agencyName, initial }: { agencyName: string; init
   return (
     <>
       <h1>Branding</h1>
-      <p className="hint">Shown on your login page, emails and portal.</p>
-      <form onSubmit={onSubmit}>
-        <label>App name<input value={v.appName} onChange={set("appName")} placeholder={agencyName} maxLength={60} /></label>
-        <label>Logo URL<input value={v.logoUrl} onChange={set("logoUrl")} placeholder="https://…/logo.png" /></label>
-        <label>
+      <p className="-mt-2 mb-4 text-sm text-muted-foreground">Shown on your login page, emails and portal.</p>
+      <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <Label>App name<Input value={v.appName} onChange={set("appName")} placeholder={agencyName} maxLength={60} /></Label>
+        <Label>Logo URL<Input value={v.logoUrl} onChange={set("logoUrl")} placeholder="https://…/logo.png" /></Label>
+        <Label>
           Primary color
-          <span className="row">
-            <input type="color" value={v.primaryColor} onChange={set("primaryColor")} style={{ width: 56, padding: 2 }} />
-            <input value={v.primaryColor} onChange={set("primaryColor")} maxLength={7} />
+          <span className="flex items-center gap-2">
+            <Input type="color" value={v.primaryColor} onChange={set("primaryColor")} className="w-14 p-1" />
+            <Input value={v.primaryColor} onChange={set("primaryColor")} maxLength={7} />
           </span>
-        </label>
-        <label>
+        </Label>
+        <Label>
           What do you call your clients?
-          <input value={v.clientLabel} onChange={set("clientLabel")} placeholder="Client (e.g. Account, Location)" maxLength={30} />
-        </label>
-        {error && <p className="error">{error}</p>}
-        {saved && <p className="ok">Saved.</p>}
-        <button disabled={pending}>Save</button>
+          <Input value={v.clientLabel} onChange={set("clientLabel")} placeholder="Client (e.g. Account, Location)" maxLength={30} />
+        </Label>
+        {error && <Alert variant="destructive">{error}</Alert>}
+        {saved && <Alert variant="success">Saved.</Alert>}
+        <div><Button disabled={pending}>Save</Button></div>
       </form>
       <h2>Preview</h2>
-      <div className="preview">
-        <span className="row">
-          {v.logoUrl && <img src={v.logoUrl} alt="" height={28} />}
-          <strong>{v.appName || agencyName}</strong>
-        </span>
-        <button type="button" style={{ background: v.primaryColor }}>Sign in</button>
-      </div>
+      <Card>
+        <CardContent className="flex flex-col gap-3 pt-6">
+          <span className="flex items-center gap-2">
+            {v.logoUrl && <img src={v.logoUrl} alt="" height={28} className="h-7 w-auto" />}
+            <strong>{v.appName || agencyName}</strong>
+          </span>
+          <div><Button type="button" style={{ background: v.primaryColor }}>Sign in</Button></div>
+        </CardContent>
+      </Card>
     </>
   );
 }

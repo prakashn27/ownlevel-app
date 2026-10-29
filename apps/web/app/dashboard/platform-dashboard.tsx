@@ -1,6 +1,8 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { AuthCard } from "../../components/auth-card";
 import { authClient } from "../../lib/auth-client";
 import { api, onHost } from "../../lib/api";
 
@@ -29,20 +31,19 @@ export function PlatformDashboard() {
     });
   }, [session, router]);
 
-  if (isPending || !session || !me) return <div className="narrow"><p>Loading…</p></div>;
+  if (isPending || !session || !me) return <AuthCard><p>Loading…</p></AuthCard>;
 
   return (
-    <div className="narrow">
-      <h1>Hello, {me.name}</h1>
-      <p>{me.email}</p>
-      <h2>Your agencies</h2>
-      <ul>
+    <AuthCard title={`Hello, ${me.name}`}>
+      <p className="text-sm text-muted-foreground">{me.email}</p>
+      <h2 className="!m-0">Your agencies</h2>
+      <ul className="list-disc pl-5 text-sm">
         {me.agencies.map((a) => (
           <li key={a.agencyId}>{a.hostname ? <a href={onHost(a.hostname, "/login")}>{a.name}</a> : a.name}</li>
         ))}
       </ul>
-      <p><a href="/onboarding">Create another agency</a></p>
-      <button onClick={() => authClient.signOut().then(() => router.push("/login"))}>Sign out</button>
-    </div>
+      <p className="text-sm"><a href="/onboarding">Create another agency</a></p>
+      <Button variant="secondary" onClick={() => authClient.signOut().then(() => router.push("/login"))}>Sign out</Button>
+    </AuthCard>
   );
 }

@@ -1,6 +1,10 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { AuthCard } from "../../components/auth-card";
 import { authClient } from "../../lib/auth-client";
 import { onHost } from "../../lib/api";
 
@@ -60,47 +64,44 @@ export default function Onboarding() {
     setCreated(body);
   }
 
-  if (isPending || !session) return <div className="narrow"><p>Loading…</p></div>;
+  if (isPending || !session) return <AuthCard><p>Loading…</p></AuthCard>;
 
   if (created) {
     const { protocol, port } = window.location;
     const url = `${protocol}//${created.hostname}${port ? `:${port}` : ""}/login`;
     return (
-      <div className="narrow">
-        <h1>{created.name} is ready</h1>
+      <AuthCard title={`${created.name} is ready`}>
         <p>Your agency portal lives at:</p>
         <p><a href={url}>{created.hostname}</a></p>
-        <p className="hint">Sign in there with the same email and password. You can add your own domain later in Settings.</p>
-      </div>
+        <p className="text-sm text-muted-foreground">Sign in there with the same email and password. You can add your own domain later in Settings.</p>
+      </AuthCard>
     );
   }
 
   const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC";
 
   return (
-    <div className="narrow">
-      <h1>Set up your agency</h1>
-      <form onSubmit={onSubmit}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Agency name" required minLength={2} />
-        <div>
-          <input
+    <AuthCard title="Set up your agency">
+      <form onSubmit={onSubmit} className="flex flex-col gap-3">
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Agency name" required minLength={2} />
+        <div className="flex flex-col gap-1.5">
+          <Input
             value={slug}
             onChange={(e) => { setSlugTouched(true); setSlug(e.target.value.toLowerCase()); }}
             placeholder="your-agency"
             required
-            style={{ width: "100%", boxSizing: "border-box" }}
           />
-          <p className="hint">
+          <p className="text-xs text-muted-foreground">
             {slug || "your-agency"}.{ROOT}
             {available === true && " · available"}
             {available === false && " · not available"}
           </p>
         </div>
-        <input name="timezone" defaultValue={tz} placeholder="Timezone" required />
-        <input name="currency" defaultValue="USD" placeholder="Currency" maxLength={3} required />
-        {error && <p className="error">{error}</p>}
-        <button disabled={pending || available === false}>Create agency</button>
+        <Input name="timezone" defaultValue={tz} placeholder="Timezone" required />
+        <Input name="currency" defaultValue="USD" placeholder="Currency" maxLength={3} required />
+        {error && <Alert variant="destructive">{error}</Alert>}
+        <Button disabled={pending || available === false}>Create agency</Button>
       </form>
-    </div>
+    </AuthCard>
   );
 }

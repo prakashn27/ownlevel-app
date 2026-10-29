@@ -26,9 +26,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html lang="en">
       <body style={style} className={info.kind === "agency" ? undefined : "theme-ownlevel"}>
         {info.kind === "agency" && (
-          <header className="brand">
-            {info.branding.logoUrl && <img src={info.branding.logoUrl} alt="" height={28} />}
-            <strong>{info.branding.appName ?? info.name}</strong>
+          <header className="flex items-center gap-2 border-b bg-card px-5 py-3">
+            {info.branding.logoUrl && <img src={info.branding.logoUrl} alt="" height={28} className="h-7 w-auto" />}
+            <strong className="font-semibold">{info.branding.appName ?? info.name}</strong>
           </header>
         )}
         {children}

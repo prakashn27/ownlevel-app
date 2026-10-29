@@ -2,6 +2,10 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { AuthCard } from "../../components/auth-card";
 import { authClient } from "../../lib/auth-client";
 
 function Form() {
@@ -10,7 +14,7 @@ function Form() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  if (!token) return <p className="error">This reset link is invalid. <Link href="/forgot-password">Request a new one</Link>.</p>;
+  if (!token) return <p className="text-sm text-destructive">This reset link is invalid. <Link href="/forgot-password">Request a new one</Link>.</p>;
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -25,20 +29,19 @@ function Form() {
   }
 
   return (
-    <form onSubmit={onSubmit}>
-      <input name="password" type="password" placeholder="New password" minLength={8} required />
-      <input name="confirm" type="password" placeholder="Confirm new password" minLength={8} required />
-      {error && <p className="error">{error}</p>}
-      <button disabled={pending}>Set new password</button>
+    <form onSubmit={onSubmit} className="flex flex-col gap-3">
+      <Input name="password" type="password" placeholder="New password" minLength={8} required />
+      <Input name="confirm" type="password" placeholder="Confirm new password" minLength={8} required />
+      {error && <Alert variant="destructive">{error}</Alert>}
+      <Button disabled={pending}>Set new password</Button>
     </form>
   );
 }
 
 export default function ResetPassword() {
   return (
-    <div className="narrow">
-      <h1>Choose a new password</h1>
+    <AuthCard title="Choose a new password">
       <Suspense><Form /></Suspense>
-    </div>
+    </AuthCard>
   );
 }

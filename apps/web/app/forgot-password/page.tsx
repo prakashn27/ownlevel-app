@@ -1,6 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { AuthCard } from "../../components/auth-card";
 import { authClient } from "../../lib/auth-client";
 
 export default function ForgotPassword() {
@@ -18,17 +22,16 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="narrow">
-      <h1>Reset your password</h1>
+    <AuthCard title="Reset your password">
       {sent ? (
         <p>If that email has an account here, we’ve sent a reset link. It expires in 1 hour.</p>
       ) : (
-        <form onSubmit={onSubmit}>
-          <input name="email" type="email" placeholder="Email" required />
-          <button disabled={pending}>Send reset link</button>
+        <form onSubmit={onSubmit} className="flex flex-col gap-3">
+          <Input name="email" type="email" placeholder="Email" required />
+          <Button disabled={pending}>Send reset link</Button>
         </form>
       )}
-      <p><Link href="/login">Back to sign in</Link></p>
-    </div>
+      <p className="text-sm"><Link href="/login">Back to sign in</Link></p>
+    </AuthCard>
   );
 }

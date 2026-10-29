@@ -1,49 +1,75 @@
-:root { --brand: #4f46e5; }
-* { box-sizing: border-box; }
-body { font-family: system-ui, sans-serif; margin: 0; color: #111; }
-form { display: flex; flex-direction: column; gap: .75rem; }
-input, select, button { padding: .5rem; font-size: 1rem; }
-input, select { border: 1px solid #bbb; border-radius: 6px; }
-button { background: var(--brand); color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
-button.secondary { background: #eee; color: #111; }
-button:disabled { opacity: .6; }
-a { color: var(--brand); }
-.error { color: #b00020; }
-.ok { color: #1a7f37; }
-.hint { color: #666; font-size: .85rem; margin: 0; }
-.brand { display: flex; align-items: center; gap: .5rem; padding: .75rem 1.25rem; border-bottom: 1px solid #eee; }
-.narrow { max-width: 360px; margin: 3rem auto; padding: 0 1rem; }
-.shell { display: flex; min-height: calc(100vh - 53px - 37px); }
-.shell nav { width: 200px; padding: 1rem; border-right: 1px solid #eee; display: flex; flex-direction: column; gap: .25rem; }
-.shell nav a { padding: .5rem .75rem; border-radius: 6px; text-decoration: none; color: #111; }
-.shell nav a.active { background: color-mix(in srgb, var(--brand) 12%, white); color: var(--brand); font-weight: 600; }
-.shell nav .spacer { flex: 1; }
-.badge { font-size: .75rem; font-weight: 500; margin-left: .5rem; padding: .1rem .5rem; border-radius: 999px; background: #eee; color: #555; vertical-align: middle; }
-/* Agency vs client view: the bar and sidebar make it obvious what a change applies to. */
-.context-bar { display: flex; align-items: center; gap: .75rem; padding: .5rem 1rem; font-size: .875rem; border-bottom: 1px solid #eee; background: #f4f4f5; color: #333; }
-.context-kind { text-transform: uppercase; letter-spacing: .05em; font-size: .7rem; font-weight: 700; padding: .15rem .5rem; border-radius: 4px; background: #e4e4e7; }
-.context-note { margin-left: auto; opacity: .8; }
-.client-mode .context-bar { background: var(--brand); color: #fff; border-color: var(--brand); }
-.client-mode .context-kind { background: rgba(255, 255, 255, .2); }
-.client-mode .context-bar .badge { background: rgba(255, 255, 255, .25); color: #fff; }
-.client-mode .shell nav { background: color-mix(in srgb, var(--brand) 5%, white); border-right-color: color-mix(in srgb, var(--brand) 25%, white); }
-.shell nav a.back { color: #555; font-size: .875rem; }
-.shell main { flex: 1; padding: 1.5rem 2rem; max-width: 760px; }
-table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #eee; }
-.row { display: flex; gap: .5rem; align-items: center; }
-.row > input { flex: 1; }
-.preview { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; gap: .5rem; }
+@import "tailwindcss";
+
+/*
+ * shadcn/ui tokens. Branding is driven by a single variable, --brand:
+ * - agency hosts: layout.tsx sets --brand inline on <body> from the agency's primary color
+ * - Ownlevel hosts: body.theme-ownlevel (matches apps/marketing)
+ * Tokens are declared on `body` (not :root) so var(--brand) resolves where the override lives.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+}
+
+body {
+  --brand: #4f46e5;
+  --background: #fafafa;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --primary: var(--brand);
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #27272a;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: color-mix(in srgb, var(--brand) 10%, white);
+  --accent-foreground: var(--brand);
+  --destructive: #dc2626;
+  --border: #e4e4e7;
+  --input: #d4d4d8;
+  --ring: color-mix(in srgb, var(--brand) 60%, transparent);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
 
 /* Ownlevel theme (matches apps/marketing). Applied only off agency hosts; agency portals keep their own branding. */
 body.theme-ownlevel {
-  --brand: #047857; --primary-deep: #0F5132; --accent: #A3E635; --accent-hover: #bef264;
-  --ink: #0B0F0E; --text: #4B5563; --line: #e1e5e2;
-  background: #F7F8F7; color: var(--text);
+  --brand: #047857;
+  --background: #f7f8f7;
+  --foreground: #0b0f0e;
+  --primary: #a3e635;
+  --primary-foreground: #0b0f0e;
+  --accent: color-mix(in srgb, var(--brand) 10%, white);
+  --accent-foreground: #0f5132;
+  --muted-foreground: #4b5563;
+  --border: #e1e5e2;
+  --ring: #a3e635;
 }
-body.theme-ownlevel h1, body.theme-ownlevel h2, body.theme-ownlevel h3 { color: var(--ink); letter-spacing: -.02em; }
-body.theme-ownlevel a:hover { color: var(--primary-deep); }
-body.theme-ownlevel :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-body.theme-ownlevel button:not(.secondary) { background: var(--accent); color: var(--ink); font-weight: 600; }
-body.theme-ownlevel button:not(.secondary):hover:not(:disabled) { background: var(--accent-hover); }
-body.theme-ownlevel input, body.theme-ownlevel select { border-color: var(--line); }
+
+@layer base {
+  * { border-color: var(--border); }
+  h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 1rem; }
+  h2 { font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; margin: 1.5rem 0 0.75rem; }
+  a { color: var(--brand); }
+  a:hover { text-decoration: underline; }
+  body.theme-ownlevel a { color: #0f5132; }
+}

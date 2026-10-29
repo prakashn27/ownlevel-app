@@ -1,6 +1,10 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { AuthCard } from "../../components/auth-card";
 import { authClient } from "../../lib/auth-client";
 import { api } from "../../lib/api";
 
@@ -39,7 +43,7 @@ function Flow() {
     setPending(false);
   }
 
-  if (invalid) return <p className="error">This invitation is invalid or has expired. Ask your admin to send a new one.</p>;
+  if (invalid) return <p className="text-sm text-destructive">This invitation is invalid or has expired. Ask your admin to send a new one.</p>;
   if (!preview || sessionPending) return <p>Loading…</p>;
 
   const signedInAsInvitee = session?.user.email.toLowerCase() === preview.email;
@@ -49,24 +53,24 @@ function Flow() {
       <p>You’ve been invited to <b>{preview.agencyName}</b> as <b>{preview.roleName}</b>.</p>
       {signedInAsInvitee ? (
         <>
-          {error && <p className="error">{error}</p>}
-          <button onClick={accept}>Accept invitation</button>
+          {error && <Alert variant="destructive">{error}</Alert>}
+          <Button onClick={accept}>Accept invitation</Button>
         </>
       ) : (
         <>
           {session && (
-            <p className="hint">
+            <p className="text-sm text-muted-foreground">
               You’re signed in as {session.user.email}. This invitation is for {preview.email}.{" "}
               <a href="#" onClick={(e) => { e.preventDefault(); void authClient.signOut().then(() => router.refresh()); }}>Sign out</a>
             </p>
           )}
-          <form onSubmit={onSubmit}>
-            <input value={preview.email} readOnly />
-            {!preview.hasAccount && <input name="name" placeholder="Your name" required />}
-            <input name="password" type="password" minLength={8} required
+          <form onSubmit={onSubmit} className="flex flex-col gap-3">
+            <Input value={preview.email} readOnly />
+            {!preview.hasAccount && <Input name="name" placeholder="Your name" required />}
+            <Input name="password" type="password" minLength={8} required
               placeholder={preview.hasAccount ? "Your password" : "Choose a password"} />
-            {error && <p className="error">{error}</p>}
-            <button disabled={pending}>{preview.hasAccount ? "Sign in and accept" : "Create account and accept"}</button>
+            {error && <Alert variant="destructive">{error}</Alert>}
+            <Button disabled={pending}>{preview.hasAccount ? "Sign in and accept" : "Create account and accept"}</Button>
           </form>
         </>
       )}
@@ -76,9 +80,8 @@ function Flow() {
 
 export default function AcceptInvite() {
   return (
-    <div className="narrow">
-      <h1>Join your team</h1>
+    <AuthCard title="Join your team">
       <Suspense><Flow /></Suspense>
-    </div>
+    </AuthCard>
   );
 }

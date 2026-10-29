@@ -1,8 +1,14 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { api } from "../../../../lib/api";
 import { notifyClientsChanged } from "../../../../lib/clients-events";
-import { TimezoneOptions } from "../../../clients/timezone-options";
+import { TimezoneSelect } from "@/components/ui/timezone-select";
 import { useClient } from "../client-workspace";
 
 export default function Settings() {
@@ -30,24 +36,23 @@ export default function Settings() {
   const archived = client.status === "archived";
   return (
     <>
-      <form onSubmit={onSubmit}>
-        <label>Name<input name="name" defaultValue={client.name} required maxLength={120} /></label>
-        <label>Timezone<input name="timezone" defaultValue={client.timezone} list="timezones" required /></label>
-        <TimezoneOptions />
-        <label>Currency<input name="currency" defaultValue={client.currency} required maxLength={3} /></label>
-        {error && <p className="error">{error}</p>}
-        {saved && <p className="ok">Saved.</p>}
-        <button disabled={pending}>Save</button>
+      <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <Label>Name<Input name="name" defaultValue={client.name} required maxLength={120} /></Label>
+        <Label>Timezone<TimezoneSelect name="timezone" defaultValue={client.timezone} /></Label>
+        <Label>Currency<Input name="currency" defaultValue={client.currency} required maxLength={3} /></Label>
+        {error && <Alert variant="destructive">{error}</Alert>}
+        {saved && <Alert variant="success">Saved.</Alert>}
+        <div><Button disabled={pending}>Save</Button></div>
       </form>
       <h2>{archived ? "Restore" : "Archive"}</h2>
-      <p className="hint">
+      <p className="mb-3 text-sm text-muted-foreground">
         {archived
           ? `Restoring makes this ${label.toLowerCase()} active again.`
           : `Archiving hides this ${label.toLowerCase()} from the switcher and stops new invitations. Nothing is deleted.`}
       </p>
-      <button className="secondary" disabled={pending} onClick={() => patch({ status: archived ? "active" : "archived" })}>
+      <Button variant={archived ? "secondary" : "outline"} disabled={pending} onClick={() => patch({ status: archived ? "active" : "archived" })}>
         {archived ? `Restore ${label.toLowerCase()}` : `Archive ${label.toLowerCase()}`}
-      </button>
+      </Button>
     </>
   );
 }

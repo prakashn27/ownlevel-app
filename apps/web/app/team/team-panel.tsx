@@ -1,5 +1,12 @@
 "use client";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Table, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { api } from "../../lib/api";
 
 type Team = {
@@ -41,39 +48,42 @@ export function TeamPanel() {
   return (
     <>
       <h1>Team</h1>
-      <form onSubmit={invite} className="row" style={{ flexDirection: "row" }}>
-        <input name="email" type="email" placeholder="Email to invite" required />
-        <select name="role" defaultValue="agency_user">
-          <option value="agency_user">Agency user</option>
-          <option value="agency_admin">Agency admin</option>
-        </select>
-        <button disabled={pending}>Invite</button>
+      <form onSubmit={invite} className="mb-4 flex items-center gap-2">
+        <Input name="email" type="email" placeholder="Email to invite" required />
+        <Select name="role" defaultValue="agency_user">
+          <SelectTrigger className="w-44 shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="agency_user">Agency user</SelectItem>
+            <SelectItem value="agency_admin">Agency admin</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button disabled={pending}>Invite</Button>
       </form>
-      {error && <p className="error">{error}</p>}
-      {notice && <p className="ok">{notice}</p>}
+      {error && <Alert variant="destructive">{error}</Alert>}
+      {notice && <Alert variant="success">{notice}</Alert>}
       {team && (
         <>
           <h2>Members</h2>
-          <table>
-            <tbody>
+          <Table>
+            <TableBody>
               {team.members.map((m) => (
-                <tr key={m.userId}><td>{m.name}</td><td>{m.email}</td><td>{m.roleName}</td></tr>
+                <TableRow key={m.userId}><TableCell className="font-medium">{m.name}</TableCell><TableCell>{m.email}</TableCell><TableCell><Badge>{m.roleName}</Badge></TableCell></TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {team.pending.length > 0 && (
             <>
               <h2>Pending invitations</h2>
-              <table>
-                <tbody>
+              <Table>
+                <TableBody>
                   {team.pending.map((p) => (
-                    <tr key={p.id}>
-                      <td>{p.email}</td><td>{p.roleName}</td>
-                      <td><button className="secondary" onClick={() => revoke(p.id)}>Revoke</button></td>
-                    </tr>
+                    <TableRow key={p.id}>
+                      <TableCell>{p.email}</TableCell><TableCell><Badge>{p.roleName}</Badge></TableCell>
+                      <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => revoke(p.id)}>Revoke</Button></TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </>
           )}
         </>

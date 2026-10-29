@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { Badge } from "@/components/ui/badge";
 import { api } from "../../../lib/api";
 
 export type Client = { id: string; name: string; timezone: string; currency: string; status: string; createdAt: string };
@@ -19,11 +20,11 @@ export function ClientWorkspace({ clientId, label, children }: { clientId: strin
   }, [clientId, label]);
   useEffect(() => { void reload(); }, [reload]);
 
-  if (!client) return error ? <p className="error">{error}</p> : <p>Loading…</p>;
+  if (!client) return error ? <p className="text-destructive">{error}</p> : <p className="text-muted-foreground">Loading…</p>;
 
   return (
     <Ctx.Provider value={{ client, label, reload }}>
-      <h1>{client.name}{client.status === "archived" && <span className="badge">Archived</span>}</h1>
+      <h1>{client.name}{client.status === "archived" && <Badge className="ml-2 align-middle">Archived</Badge>}</h1>
       {children}
     </Ctx.Provider>
   );
