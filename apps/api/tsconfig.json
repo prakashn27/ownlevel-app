@@ -1,1 +1,1 @@
-{ "extends": "../../tsconfig.base.json", "include": ["src", "tools"] }
+{ "extends": "../../tsconfig.base.json", "include": ["src", "tools", "drizzle.config.ts"] }
