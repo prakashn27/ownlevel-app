@@ -87,10 +87,8 @@ const jsonLd = { "@context": "https://schema.org", "@type": "Organization", name
         {alternates?.[other]
           ? <a href={alternates[other]} hreflang={hreflang[other]} lang={hreflang[other]}>{t("lang.switch")}</a>
           : null}
-        {/* TODO: re-enable once the app is live
         <a href={`${appUrl}/login`}>{t("nav.signin")}</a>
         <a class="btn" href={`${appUrl}/signup`}>{t("nav.cta")}</a>
-        */}
       </nav>
     </header>
     <main class="wrap"><slot /></main>
