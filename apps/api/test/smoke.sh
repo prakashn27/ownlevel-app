@@ -49,6 +49,23 @@ req $TMP/a $AGENCY PATCH /api/agency/branding '{"appName":"Smoke Hub","primaryCo
 req $TMP/a $AGENCY PATCH /api/agency/branding '{"primaryColor":"red"}' >/dev/null; check "invalid color rejected" 400
 req $TMP/x $AGENCY GET /api/host >/dev/null; contains "branding served publicly on host" 'Smoke Hub'
 
+req $TMP/a $AGENCY POST /api/clients '{"name":"Acme"}' >/dev/null; check "client created" 201
+CID=$(sed 's/.*"id":"\([^"]*\)".*/\1/' "$TMP/out")
+req $TMP/a $AGENCY POST /api/clients '{"name":""}' >/dev/null; check "empty client name rejected" 400
+req $TMP/a $AGENCY GET /api/clients >/dev/null; contains "client listed" 'Acme'
+req $TMP/a $AGENCY GET /api/clients/$CID >/dev/null; check "client fetched" 200
+req $TMP/a $AGENCY GET /api/clients/not-a-uuid >/dev/null; check "bad client id is 404" 404
+req $TMP/x $AGENCY GET /api/clients >/dev/null; check "clients require sign-in" 401
+req $TMP/a $AGENCY POST /api/clients/$CID/invitations "{\"email\":\"cu-$RUN@smoke.test\",\"role\":\"client_user\"}" >/dev/null; check "client invite sent" 201
+req $TMP/a $AGENCY POST /api/clients/$CID/invitations "{\"email\":\"cu2-$RUN@smoke.test\",\"role\":\"agency_user\"}" >/dev/null; check "agency role rejected on client invite" 400
+req $TMP/a $AGENCY GET /api/clients/$CID/team >/dev/null; contains "client team shows pending invite" "cu-$RUN@smoke.test"
+req $TMP/a $AGENCY PATCH /api/clients/$CID '{"name":"Acme Co","timezone":"Europe/Berlin","currency":"eur"}' >/dev/null; contains "client edited" '"currency":"EUR"'
+req $TMP/a $AGENCY PATCH /api/clients/$CID '{"timezone":"Mars/Base"}' >/dev/null; check "bad timezone rejected" 400
+req $TMP/a $AGENCY PATCH /api/clients/$CID '{"status":"archived"}' >/dev/null; contains "client archived" '"status":"archived"'
+req $TMP/a $AGENCY POST /api/clients/$CID/invitations "{\"email\":\"cu3-$RUN@smoke.test\",\"role\":\"client_user\"}" >/dev/null; check "archived client takes no invites" 400
+req $TMP/a $AGENCY PATCH /api/clients/$CID '{"status":"active"}' >/dev/null; contains "client restored" '"status":"active"'
+req $TMP/a $AGENCY GET /api/team >/dev/null; if grep -q "cu-$RUN" "$TMP/out"; then echo "FAIL client invite leaked into agency team"; FAIL=1; else echo "ok   client invite not in agency team"; fi
+
 req $TMP/a $AGENCY POST /api/team/invitations "{\"email\":\"$STAFF\",\"role\":\"agency_user\"}" >/dev/null; check "invite sent" 201
 # Dev email transport prints the link to the API console. Point API_LOG at that output (or set INVITE_TOKEN).
 if [ -z "${INVITE_TOKEN:-}" ] && [ -n "${API_LOG:-}" ]; then
@@ -65,6 +82,9 @@ if [ -n "${INVITE_TOKEN:-}" ]; then
   req $TMP/s $AGENCY POST /api/invitations/accept "{\"token\":\"$INVITE_TOKEN\"}" >/dev/null; check "invitation cannot be reused" 404
   req $TMP/s $AGENCY GET /api/team >/dev/null; contains "staff now sees the team" "$STAFF"
   req $TMP/s $AGENCY PATCH /api/agency/branding '{"appName":"x"}' >/dev/null; check "staff cannot edit branding" 403
+  req $TMP/s $AGENCY GET /api/clients >/dev/null; contains "staff can list clients" 'Acme Co'
+  req $TMP/s $AGENCY POST /api/clients '{"name":"Nope"}' >/dev/null; check "staff cannot create clients" 403
+  req $TMP/s $AGENCY PATCH /api/clients/$CID '{"name":"Nope"}' >/dev/null; check "staff cannot edit clients" 403
   req $TMP/x $AGENCY POST /api/auth/request-password-reset "{\"email\":\"$STAFF\"}" >/dev/null; check "reset requested" 200
 fi
 

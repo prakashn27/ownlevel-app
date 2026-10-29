@@ -4,16 +4,20 @@ import {
   DomainError,
   acceptInvitation,
   createAgency,
+  createClient,
   createInvitation,
+  getClient,
   getTeam,
   inviteEmail,
   isSlugAvailable,
   listAgencyMemberships,
+  listClients,
   previewInvitation,
   resolveHost,
   revokeInvitation,
   sendEmail,
   updateBranding,
+  updateClient,
 } from "@ownlevel/core";
 import { parseHost } from "@ownlevel/tenancy";
 import { auth } from "./auth.js";
@@ -151,10 +155,10 @@ app.get("/api/team", async (c) => {
   return c.json(await getTeam(db, ctx));
 });
 
-app.post("/api/team/invitations", async (c) => {
+async function sendInvite(c: Ctx, clientId?: string) {
   const { ctx, user, resolved } = await agencyCtx(c);
   const body = await jsonBody(c);
-  const inv = await createInvitation(db, ctx, { email: String(body.email ?? ""), roleKey: String(body.role ?? "") });
+  const inv = await createInvitation(db, ctx, { email: String(body.email ?? ""), roleKey: String(body.role ?? ""), clientId });
   const appName = resolved.branding.appName ?? resolved.name;
   const url = `${requestHost(c.req.raw.headers).origin}/accept-invite?token=${inv.token}`;
   const mail = inviteEmail({ appName, inviterName: user.name, roleName: inv.roleName, url });
@@ -168,7 +172,37 @@ app.post("/api/team/invitations", async (c) => {
     );
   }
   return c.json({ email: inv.email }, 201);
+}
+
+app.post("/api/team/invitations", (c) => sendInvite(c));
+
+// ── Clients: the client id comes from the URL but is always checked against the host's agency ──
+app.get("/api/clients", async (c) => {
+  const { ctx } = await agencyCtx(c);
+  return c.json(await listClients(db, ctx));
 });
+
+app.post("/api/clients", async (c) => {
+  const { ctx } = await agencyCtx(c);
+  return c.json(await createClient(db, ctx, await jsonBody(c)), 201);
+});
+
+app.get("/api/clients/:clientId", async (c) => {
+  const { ctx } = await agencyCtx(c);
+  return c.json(await getClient(db, ctx, c.req.param("clientId")));
+});
+
+app.patch("/api/clients/:clientId", async (c) => {
+  const { ctx } = await agencyCtx(c);
+  return c.json(await updateClient(db, ctx, c.req.param("clientId"), await jsonBody(c)));
+});
+
+app.get("/api/clients/:clientId/team", async (c) => {
+  const { ctx } = await agencyCtx(c);
+  return c.json(await getTeam(db, ctx, c.req.param("clientId")));
+});
+
+app.post("/api/clients/:clientId/invitations", (c) => sendInvite(c, c.req.param("clientId")));
 
 app.delete("/api/team/invitations/:id", async (c) => {
   const { ctx } = await agencyCtx(c);
