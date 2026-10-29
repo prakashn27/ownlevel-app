@@ -158,7 +158,15 @@ app.post("/api/team/invitations", async (c) => {
   const appName = resolved.branding.appName ?? resolved.name;
   const url = `${requestHost(c.req.raw.headers).origin}/accept-invite?token=${inv.token}`;
   const mail = inviteEmail({ appName, inviterName: user.name, roleName: inv.roleName, url });
-  await sendEmail(db, transport, { agencyId: ctx.agencyId }, { from: fromAddress(appName), to: inv.email, ...mail });
+  try {
+    await sendEmail(db, transport, { agencyId: ctx.agencyId }, { from: fromAddress(appName), to: inv.email, ...mail });
+  } catch (err) {
+    console.error("invitation email failed", err);
+    return c.json(
+      { error: "email_failed", message: `The invitation was created but the email to ${inv.email} could not be sent. Check the email provider settings, then revoke and re-invite.` },
+      502,
+    );
+  }
   return c.json({ email: inv.email }, 201);
 });
 

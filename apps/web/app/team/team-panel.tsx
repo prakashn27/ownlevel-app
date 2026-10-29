@@ -27,7 +27,7 @@ export function TeamPanel() {
     const f = new FormData(form);
     const r = await api<{ email: string }>("/api/team/invitations", { body: { email: f.get("email"), role: f.get("role") } });
     setPending(false);
-    if (!r.ok) return setError(r.error);
+    if (!r.ok) { void load(); return setError(r.error); }
     setNotice(`Invitation sent to ${r.data.email}`);
     form.reset();
     void load();

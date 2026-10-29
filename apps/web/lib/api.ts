@@ -6,7 +6,7 @@ export async function api<T = unknown>(path: string, init?: { method?: string; b
     body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
   const data = (await res.json().catch(() => ({}))) as T & { message?: string; error?: string };
-  return { ok: res.ok, status: res.status, data, error: res.ok ? null : (data.message ?? "Something went wrong") };
+  return { ok: res.ok, status: res.status, data, error: res.ok ? null : (data.message ?? (res.status >= 500 ? `Server error (${res.status}). Please try again or contact support.` : "Something went wrong")) };
 }
 
 /** Absolute URL on another host, keeping the current protocol and dev port. */
