@@ -12,3 +12,4 @@ package-lock.json
 yarn.lock
 .astro/
 agent_docs/
+.wrangler/

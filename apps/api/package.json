@@ -9,6 +9,9 @@
     "start": "tsx --env-file-if-exists=.env src/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/migrate.ts",
+    "cf:deploy": "wrangler deploy",
+    "cf:dev": "wrangler dev --port 4000",
+    "cf:dry": "wrangler deploy --dry-run --outdir .wrangler/dry",
     "typecheck": "tsc --noEmit",
     "test": "tsx --env-file-if-exists=.env --test test/*.test.ts"
   },
@@ -27,6 +30,7 @@
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "^4.154.0"
   }
 }

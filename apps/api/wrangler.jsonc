@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ownlevel-api",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-09-01",
+  // nodejs_compat: pg, node:crypto, node:async_hooks. process.env is populated from vars/secrets.
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // Create with: wrangler hyperdrive create ownlevel-db --connection-string="postgres://ownlevel_app:...@host:5432/ownlevel"
+  // Then paste the returned id below. The role must NOT be superuser/BYPASSRLS.
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "3f07738b696246ad83692a07daa88f14", "localConnectionString": "postgres://ownlevel:ownlevel@localhost:5432/ownlevel" }],
+
+  // Secrets (wrangler secret put): BETTER_AUTH_SECRET, PROXY_SHARED_SECRET, RESEND_API_KEY
+  "vars": {
+    "BETTER_AUTH_URL": "https://api.ownlevel.app",
+    "PLATFORM_ROOT_DOMAIN": "ownlevel.app",
+    "PLATFORM_HOSTS": "app.ownlevel.app",
+    "WEB_ORIGINS": "",
+    "EMAIL_FROM": "noreply@ownlevel.app"
+  },
+
+  // A route, not a custom domain: the web Worker's `*.ownlevel.app/*` route also matches this host and
+  // routes beat custom domains, while the more specific pattern here beats the wildcard.
+  // Needs a proxied (orange-cloud) DNS record for `api` in zone ownlevel.app (a dummy A 192.0.2.1 works).
+  "routes": [{ "pattern": "api.ownlevel.app/*", "zone_name": "ownlevel.app" }]
+}

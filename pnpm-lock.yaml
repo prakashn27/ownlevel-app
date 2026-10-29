@@ -57,6 +57,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      wrangler:
+        specifier: ^4.154.0
+        version: 4.154.0(@types/node@26.6.6)
 
   apps/marketing:
     dependencies:
