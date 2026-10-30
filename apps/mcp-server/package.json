@@ -9,7 +9,8 @@
     "cf:dev": "wrangler dev --env preview --port 4100",
     "cf:dry": "wrangler deploy --dry-run --outdir .wrangler/dry",
     "typecheck": "tsc --noEmit",
-    "test:oauth": "tsx test/oauth-e2e.ts"
+    "test:oauth": "tsx test/oauth-e2e.ts",
+    "test:booking": "tsx test/booking-e2e.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.17",

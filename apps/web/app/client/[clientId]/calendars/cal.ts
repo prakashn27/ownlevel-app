@@ -8,6 +8,7 @@ export type Calendar = {
   slug: string;
   description: string | null;
   status: "draft" | "published" | "archived";
+  ai_booking: boolean;
   timezone: string;
   default_country: string | null;
   require_email: boolean;

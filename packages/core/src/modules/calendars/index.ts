@@ -20,3 +20,4 @@ export { bookPublic, cancelManagedBooking, getManagedBooking, getPublicCalendar,
 export { backfillAttendeeContacts, linkContact, defaultCountry } from "./contacts.js";
 export { validateAnswers, FIELD_TYPES, type StoredAnswer } from "./form.js";
 export { getBookingSettings, getClientTimezone, updateBookingSettings } from "./booking-settings.js";
+export { aiBook, aiCancel, aiServiceDetails, aiServices, aiSlots, resolveAiTarget, type AiBookInput, type AiTarget } from "./ai-booking.js";

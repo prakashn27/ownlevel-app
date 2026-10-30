@@ -1,10 +1,10 @@
 # Ownlevel — MCP Server
 
-Status: agency (staff) slice built end to end with Better Auth OAuth 2.1; contact principal and appointments are planned.
+Status: staff connections (agency and client level, Better Auth OAuth 2.1) and the public booking endpoint for visitors' AI assistants are built; audit log and approval flow are planned.
 
 ## Overview
 
-Ownlevel exposes one MCP server so that LLM clients (Claude, ChatGPT) can act inside Ownlevel. Authentication and the token model are in [2_Authentication.md](./2_Authentication.md#mcp-tool-authorization-agency-and-client); this document covers the server, the tool registry, and how clients distribute MCP to their own contacts.
+Ownlevel exposes one MCP server so that LLM clients (Claude, ChatGPT) can act inside Ownlevel. Authentication and the token model are in [2_Authentication.md](./2_Authentication.md#mcp-tool-authorization-agency-and-client); this document covers the server, the tool registry, and how clients let their visitors book through AI assistants ([Public booking](#public-booking-for-visitors-ai-assistants)).
 
 Two layers, kept apart on purpose:
 
@@ -77,13 +77,13 @@ A failure at any layer looks the same to the client (`Tool not found` or 401), s
 
 ## Who can call
 
-| Caller | Identity | Install level | Sees |
+| Caller | Identity | Where | Sees |
 | --- | --- | --- | --- |
-| Agency staff | `user` + agency membership | Agency | Agency tools plus client tools (`client_id` required, checked against reach) |
-| Client staff | `user` + client membership | Client | Client staff tools for that one client |
-| Contact (the client's customer) | `contacts` row, no `user`, no role | Client | Contact tools for that one client, own data only |
+| Agency staff | `user` + agency membership, OAuth token | `/mcp` | Agency tools plus client tools (`client_id` required, checked against reach) |
+| Client staff | `user` + client membership, OAuth token | `/mcp` | Client staff tools for that one client |
+| Visitor's AI assistant | None. Like the public booking page, no sign-in | `/book/{agency}/{client}/mcp` | Free times and booking for the calendars the client switched on; never other people's bookings |
 
-Contacts are the third principal and are **not built yet** (design in [Contact identity](#contact-identity)). Staff identity, `withTenant` and RLS are keyed on `userId` and `agencyId` today.
+Visitors (a client's customers) have no account and no login, so there is no contact principal, no contact token and no contact RLS. What a visitor's assistant can do is exactly what the public booking page allows, gated by the client's switches. Staff tools are never reachable on the public route: it has its own tool list.
 
 ## Tool registry
 
@@ -93,7 +93,6 @@ Contacts are the third principal and are **not built yet** (design in [Contact i
   permission: 'agency:settings',   // role_permissions; enforced again by core (requireRole)
   scope: 'agency:settings',        // OAuth scope on the token
   levels: ['agency'],              // agency | client
-  audience: ['staff'],             // planned: staff | contact
   sensitivity: 'normal',           // normal | outbound | destructive
   input: z.object({ ... }),
   run: (ctx, args) => coreFunction(ctx.db, ctx, args.x),
@@ -104,20 +103,20 @@ Built so far: `agency_set_brand_color` (calls `updateBrandColor`, which merges; 
 
 ## Tool catalogue
 
-One tool per core action; the LLM chains them. Tools never take identity (who books, who is "me") as an argument: it comes from the token.
+One tool per core action; the LLM chains them. Staff tools never take identity (who is "me") as an argument: it comes from the token. Public booking tools take the visitor's own details, like the public form.
 
 | Audience, level | Example prompt | Tools | Scope |
 | --- | --- | --- | --- |
 | Agency staff, agency | "Create a client named Bloom Salon with a calendar" | `clients_list`, `clients_create` (`with_calendar`), `calendars_create` (`client_id`) | `clients:read`, `clients:write`, `calendars:write` |
 | Client staff, client (agency staff too, with `client_id`) | "What are my appointments tomorrow?" | `calendars_list`, `appointments_list` (`date`, `days`, `mine`), `slots_find` | `appointments:read` |
-| Contact, client (planned) | "Book a haircut at 10 am tomorrow" | `services_list`, `slots_find`, `appointment_book`, `my_appointments`, `appointment_cancel` | `appointments:book` |
+| Visitor, public endpoint (no token) | "Book a haircut at 10 am tomorrow" | `services_list`, `service_details`, `slots_find`, `appointment_book`, `appointment_cancel` | none |
 
 Decisions:
 
 - **"With a calendar" creates a default calendar.** There is no per-client module switch. `clients_create` with `with_calendar: true` creates the client, then a draft personal calendar named after the client with default hours and no host. The two steps are separate transactions: if the calendar fails, the client stays and the result says so.
 - **`appointments_list` returns all of the client's appointments**; `mine: true` limits it to appointments the caller hosts.
 - **Dates are local.** Tools take `date: "2025-06-12"` and the server resolves the range in the client's (or calendar's) timezone. LLMs must not compute UTC ranges.
-- **Contacts book published calendars only**, the same rule as the public booking page. Name and email come from the contact's identity, never from arguments.
+- **Visitors book published calendars the client switched on**, the same rules as the public booking page (hours, notice, horizon, no double booking, the client's form questions).
 - **Write tools carry MCP annotations** (`readOnlyHint`, `destructiveHint`) so Claude and ChatGPT ask before writing. Elicitation support varies by client, so it is not the only safeguard.
 
 ## Request flow
@@ -246,7 +245,7 @@ Design decisions that matter in production:
 | MCP | `OAUTH_JWKS_URL` | `https://api.ownlevel.app/api/auth/jwks` |
 | MCP | `MCP_DEV_AUTH` | never set (dev tokens also refuse to start unless the issuer is `localhost`) |
 
-**Deploy**: run migration `0005`, then `pnpm --filter @ownlevel/api cf:deploy` and `pnpm --filter @ownlevel/mcp-server cf:deploy` (full runbook in 3_Deployment.md). `mcp` needs a proxied DNS record.
+**Deploy**: run migrations `0005`, `0010` (client-level connections) and `0011` (AI booking switches), then `pnpm --filter @ownlevel/api cf:deploy` and `pnpm --filter @ownlevel/mcp-server cf:deploy` (full runbook in 3_Deployment.md). `mcp` needs a proxied DNS record.
 
 **Verify** (read-only):
 
@@ -434,66 +433,73 @@ pnpm --filter @ownlevel/api exec wrangler tail --format pretty # API Worker: OAu
 | Tool call returns "Tool not found" for the owner | The token lacks the `agency:settings` scope (the client did not request it), or the member's role is not owner or admin. |
 | 401 right after a team change | Expected: membership is re-checked on every request. |
 
-## Distributing MCP to contacts
+## Public booking for visitors' AI assistants
 
-Goal: a client gives its contacts a connection URL; a contact adds it to their LLM and says "book a haircut at 3PM", and the appointment appears in the client's calendar.
+Goal: a client gives its customers one link. A customer adds it to ChatGPT or Claude and says "book a haircut at 10 tomorrow"; the assistant checks free times and books, and the appointment appears in the client's calendar. No sign-in, like the public booking page. Customers do not need an Ownlevel account, and there is no per-customer identity.
 
 ```mermaid
 sequenceDiagram
-  participant U as Contact (in Claude / ChatGPT)
-  participant M as MCP server
-  participant A as Better Auth (OAuth 2.1)
-  participant C as Core (appointments)
+  participant V as Visitor (in ChatGPT / Claude)
+  participant M as MCP Worker /book/{agency}/{client}/mcp
+  participant K as Core (public booking)
 
-  U->>M: add connector URL
-  M-->>U: 401 + resource_metadata
-  U->>A: authorize (PKCE), branded for the client
-  A->>U: email OTP or magic link
-  A-->>U: consent, token (subject = contact, client fixed)
-  U->>M: tools/call appointments_book(service, 3PM)
-  M->>C: ctx { contactId, clientId }
-  C-->>M: booked in the client's calendar
-  M-->>U: confirmation
+  V->>M: services_list
+  M->>M: limit per client, resolve agency + client, switches on?
+  M-->>V: only the calendars the client chose
+  V->>M: slots_find(service, date)
+  M->>K: getPublicSlots
+  K-->>V: free times in the calendar's local time
+  V->>V: shows the details, asks the visitor to confirm
+  V->>M: appointment_book(service, starts_at, name, email or phone)
+  M->>K: bookPublic(source = mcp)
+  K-->>V: confirmed + manage_token
 ```
 
-Design:
+### The URL
 
-Decided: one connector per client, email sign-in, Better Auth reused for contacts but kept strictly apart from staff (see [Contact identity](#contact-identity)).
+`https://mcp.ownlevel.app/book/{agencySlug}/{clientSlug}/mcp`, one per client (the client's booking address name is `clientSlug`). The assistant discovers the client's offered calendars (services) from `services_list`. The dashboard shows the link with a copy button in the client's settings. It sits on the MCP host for now, so agencies with a custom domain see `mcp.ownlevel.app` in the link. Branded URLs on the agency host (for example `app.clientbrand.com/mcp/...`, routed through the web Worker) are a later step.
 
-1. **Same server, same registry.** Add `audience` to `ToolDef`. Contact tools are `levels: ['client']`, `audience: ['contact']`: `appointments_list_slots`, `appointments_book`, `appointments_cancel`, `appointments_mine`. Staff tools never appear for contacts, and the reverse.
-2. **`ToolContext` becomes a union.** Staff: `userId` and a live role. Contact: `contactId` and `clientId`. Contact tools take no `client_id` argument; the install fixes it.
-3. **Contact sign-in.** Passwordless email OTP (Better Auth `emailOTP` plugin) on the client's branded host. Verifying it finds or creates the `contacts` row; the token subject is that contact's login. The consent screen offers only contact scopes (for example `appointments:book`). TODO (later): SMS OTP for contacts with a phone but no email, using the same E.164 matching as bookings.
-4. **Distribution.** The client shares a connect URL (host-based, for example `https://app.clientbrand.com/mcp`, or `/client/:slug/mcp`), a QR code, and a copy-paste snippet. The URL's client must match the token's client. Client ID Metadata Documents avoid manual client registration.
-5. **Data isolation.** Add RLS policies keyed on an `app.contact_id` setting so a contact can only touch rows with their own `contact_id`. Do not rely on application code alone.
-6. **Abuse controls.** Per-contact rate limits, a client-level switch to enable or disable contact MCP, and confirmation before booking. `outbound` and `destructive` tools use MCP elicitation so the LLM must confirm ("Haircut, Thu 3:00 PM?") with the user.
-7. **One connection per client.** See below.
+### The client's controls (dashboard)
 
-### One connection per client
+Everything is **off by default**; nothing is exposed until the client opts in at two levels. The MCP Worker needs the two rate-limit bindings in `wrangler.jsonc` (`unsafe.bindings`), and the API needs `MCP_PUBLIC_URL` (already set) so the dashboard can show the link.
 
-A contact-level token is bound to exactly one client. A contact who uses several clients (for example a salon and a gym) adds one connector per client and signs in separately for each.
+| Switch | Where | Column | Who can change it |
+| --- | --- | --- | --- |
+| Master: "Let visitors' AI assistants book" | Client settings > Booking page | `clients.ai_booking` | Agency owner, admin, client admin |
+| Per calendar: "Offer this calendar to AI assistants" | Calendar settings > AI assistants | `calendars.ai_booking` | Same (the `clientSettings` action) |
 
-- **Consent is unambiguous.** The consent screen is branded for one client and lists only that client's contact scopes. There is no picker, so a contact never grants access to a business they didn't mean to.
-- **Revocation is a single row.** Disabling a contact's connection, or the client turning contact MCP off, removes one `app_installations` row at the client level. Nothing else is affected.
-- **No cross-client reach.** The client is fixed by the install and the URL must match it (host-based or `/client/:slug/mcp`). Tools take no `client_id`, and the same `contacts` person in another client is a different row with a different token.
-- **Tenancy stays simple.** The token carries `contactId` and `clientId`, so RLS and rate limits key on one pair. There is no "all my clients" token to scope or audit.
-- **Cost.** More setup for contacts who use several clients. That is accepted; a shared multi-client contact identity would need a new cross-client consent model and is out of scope.
+A calendar is reachable only if the client is active, the master switch is on, the calendar is **published** and its own switch is on. Anything else, including an unknown agency or client, is the same `404`, so nothing leaks. Turning the master switch off closes the whole endpoint at once (cancelling an existing booking still works through the emailed link).
 
-Agency staff keep the existing agency-level install, which can reach several clients (see 2_Authentication.md). This rule applies to contacts only.
+### Tools
 
-### Contact identity
-
-Contacts reuse Better Auth (sessions, OAuth, JWT, JWKS) but are a separate kind of account that can never act as staff.
-
-| Rule | How |
+| Tool | Does |
 | --- | --- |
-| A login is either staff or contact, fixed at creation | `user.kind` (`staff` default, `contact`), set only by the contact OTP sign-in path |
-| Contact logins never get staff access | A database trigger rejects `memberships` rows for `kind = 'contact'`; invitations to a contact email are refused |
-| Staff logins never act as contacts | Contact sign-in refuses an email that belongs to a `staff` login (the person uses another email); staff login and the agency picker refuse `contact` logins |
-| Token says which kind | Contact tokens carry `kind: "contact"` and `client_id`, no `agency_id` picker; the MCP server builds a contact `ToolContext` only from those, a staff context only from staff tokens |
-| Link to the CRM row | `contact_logins (user_id, client_id, contact_id)`, created at first sign-in for that client; re-checked on every request, so deleting the contact or the link revokes access |
-| Data isolation | `withContact` sets `app.contact_id` (never `app.user_id`); contact RLS policies match only rows with that `contact_id`, and staff policies never match a contact context |
+| `services_list` | The offered calendars: id, name, description, duration, timezone |
+| `service_details` | What booking needs (email, phone or either) and the client's form questions |
+| `slots_find` | Free start times on local days (`date`, `days` up to 7), in the calendar's timezone |
+| `appointment_book` | Books with the visitor's name and email or phone, same validation, contact matching and double-booking protection as the public form. Returns a `manage_token` |
+| `appointment_cancel` | Cancels with that `manage_token` (only for this client) |
 
-The contact's email is matched to a `contacts` row with the booking rules in [5_1_Calendar.md](./5_1_Calendar.md#contacts) (create one if none). Changing the contact's email in the CRM does not break the link, which is by id.
+- **No "my appointments".** Without sign-in there is no safe way to look up someone's bookings, so cancelling works only through the token the booking returned (or the emailed link). The token is the secret; keep it in the conversation.
+- **What visitors see:** only free times and the details the public page already shows (names of hosts, the form). Never other appointments or attendee data.
+- **Source:** bookings are stored with `source = mcp` and linked to a contact exactly like public bookings (`created_by_source = mcp`), so they show in the dashboard as AI bookings.
+- **Annotations and wording.** Read tools are `readOnlyHint`; `appointment_book` is a write and `appointment_cancel` is `destructiveHint`, so Claude and ChatGPT ask before running them. The tool description also tells the assistant to show the service, time and details and get the visitor's OK, and never to invent a name, email or phone.
+- **Retries.** The assistant may repeat a call after a timeout; an idempotency key derived from the service, time, person and the current hour makes the second call return the same booking.
+
+### Abuse controls
+
+The public page uses Cloudflare Turnstile, which an assistant cannot solve, so the endpoint relies on other limits:
+
+- **Rate limits per client, not per IP** (Workers rate-limit bindings `AI_CLIENT_LIMITER`, 300 per minute, and `AI_BOOK_LIMITER`, 10 booking calls per minute). Assistants call from their provider's shared IPs, so a per-IP limit would throttle every user of that provider together. Limits are per Cloudflare location and slow abuse; they are not exact. Not enforced on plain Node (local).
+- **A person can hold at most 3 upcoming bookings per client** through this endpoint (`MAX_UPCOMING_PER_PERSON_AI`, matched on email or phone), so one person cannot fill a calendar.
+- **The client can see and cancel** AI bookings (source `mcp`) and can switch the endpoint off at any time.
+
+**TODO, email confirmation.** Add an optional step where a booking stays "pending" until the visitor opens a link emailed to them. This stops fake or someone else's email and impersonation, at the price of an extra step and the notifications work in [5_1_Calendar.md](./5_1_Calendar.md). Not built: it is only worth it if abuse shows up. A confirmation email with the manage link after booking is part of the same notifications TODO.
+
+### Not verified
+
+- Whether ChatGPT and Claude custom connectors accept a server with no authentication on every plan and workspace type. Check before promising it to clients.
+- Behaviour with a real assistant over public HTTPS. Automated check: `pnpm --filter @ownlevel/mcp-server test:booking` (23 checks: the switches, only chosen calendars offered, free times in local time, booking, retry, taken slot, not-offered time, per-person cap, cancel with the token, another client's token refused).
 
 ## Status and roadmap
 
@@ -511,10 +517,13 @@ The contact's email is matched to a `contacts` row with the booking rules in [5_
 | Appointments schema and core (`getSlots`, `book`, `cancelAll`, no double booking) | Done (calendars module) |
 | Agency tools: `clients_list`, `clients_create` (with default calendar), `calendars_create` | Done |
 | Client-level install (client picker at consent, `tenant_client_id` claim), `calendars_list`, `appointments_list`, `slots_find` | Done; verified by `test:oauth` and dev tokens |
-| Contact principal (`user.kind`, email OTP, `contact_logins`, contact-scoped RLS) | Not started; SMS OTP later |
-| Contact tools and the client's "connect your AI" page | Not started |
+| Public booking endpoint `/book/{agency}/{client}/mcp`: master + per-calendar switches (migration `0011`), tools, per-client rate limits, per-person cap | Done; verified by `test:booking` (not yet with a real assistant) |
+| Dashboard: AI switches and the link to copy (client settings, calendar settings) | Done |
+| Email confirmation before an AI booking counts | TODO (see Abuse controls) |
+| Branded public MCP URL on the agency's own host | Not started |
+| Contact accounts and sign-in (email OTP, SMS OTP) | Dropped: visitors book without an account, like the public page |
 | Remove `endpoints/client` and `endpoints/partner` stubs for a single `/mcp` route | Open |
 
-Suggested order: agency tools, then the client-level install and appointment tools, then audit and tool annotations, then the contact principal, contact tools and the connect page. Before launch, work through the "Not verified" list in Production.
+Suggested order from here: audit log and annotations on the staff tools, then the email confirmation and notifications TODO. Before launch, work through the "Not verified" lists in Production and Public booking.
 
 

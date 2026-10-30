@@ -373,8 +373,13 @@ app.patch("/api/clients/:clientId/appointments/:id/attendees/:attendeeId", async
   c.json(await updateAttendee(db, await crmScope(c), c.req.param("id"), c.req.param("attendeeId"), await jsonBody(c))));
 
 // Booking address and phone default country of a client.
-app.get("/api/clients/:clientId/booking-settings", async (c) => c.json(await getBookingSettings(db, await crmScope(c))));
-app.patch("/api/clients/:clientId/booking-settings", async (c) => c.json(await updateBookingSettings(db, await crmScope(c), await jsonBody(c))));
+/** The address visitors paste into their AI assistant. Same host as the MCP server, one URL per client. */
+const withMcpUrl = <T extends { slug: string | null; agency_slug: string }>(s: T) => ({
+  ...s,
+  mcp_url: s.slug ? `${new URL(env.mcpUrl).origin}/book/${s.agency_slug}/${s.slug}/mcp` : null,
+});
+app.get("/api/clients/:clientId/booking-settings", async (c) => c.json(withMcpUrl(await getBookingSettings(db, await crmScope(c)))));
+app.patch("/api/clients/:clientId/booking-settings", async (c) => c.json(withMcpUrl(await updateBookingSettings(db, await crmScope(c), await jsonBody(c)))));
 
 // ── Public booking: no session. The agency comes from the host; the page from the URL. ──
 type Limiter = { limit(o: { key: string }): Promise<{ success: boolean }> };

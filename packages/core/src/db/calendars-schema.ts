@@ -26,6 +26,8 @@ export const calendars = pgTable(
     slug: text("slug").notNull(),
     description: text("description"),
     status: text("status").notNull().default("draft"),
+    /** Offered to visitors' AI assistants (also needs the client's master switch and a published calendar). */
+    aiBooking: boolean("ai_booking").notNull().default(false),
     timezone: text("timezone").notNull(),
     /** Phone default country for the booking page; null = the client's, then the agency's. */
     defaultCountry: text("default_country"),

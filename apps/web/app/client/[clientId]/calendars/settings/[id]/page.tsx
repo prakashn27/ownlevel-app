@@ -39,6 +39,7 @@ export default function CalendarEditor() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [bookingSlug, setBookingSlug] = useState<string | null | undefined>(undefined);
+  const [clientAi, setClientAi] = useState(false);
   const [copied, setCopied] = useState(false);
   const url = `${base(client.id)}/calendars/${id}`;
 
@@ -51,7 +52,7 @@ export default function CalendarEditor() {
   // Only people allowed to configure calendars can list eligible hosts; others see a read-only page.
   useEffect(() => { void api<{ items: Person[] }>(`${base(client.id)}/calendars/eligible-hosts`).then((r) => setPeople(r.ok ? r.data.items : null)); }, [client.id]);
 
-  useEffect(() => { void api<{ slug: string | null }>(`${base(client.id)}/booking-settings`).then((r) => r.ok && setBookingSlug(r.data.slug)); }, [client.id]);
+  useEffect(() => { void api<{ slug: string | null; ai_booking: boolean }>(`${base(client.id)}/booking-settings`).then((r) => { if (r.ok) { setBookingSlug(r.data.slug); setClientAi(r.data.ai_booking); } }); }, [client.id]);
 
   async function patch(body: Record<string, unknown>, done?: string) {
     setError(null); setNotice(null);
@@ -151,6 +152,14 @@ export default function CalendarEditor() {
             </details>
           </>
         ) : null}
+      </section>
+
+      <section>
+        <h2 className="mt-0">{t("settings.aiTitle")}</h2>
+        <p className="mt-0 text-sm text-muted-foreground">{t("settings.aiHelp")}</p>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={!editable} checked={cal.ai_booking} onChange={(e) => void patch({ ai_booking: e.target.checked }, t("settings.saved"))} />{t("settings.aiOffer")}</label>
+        {cal.ai_booking && !clientAi && <p className="mb-0 text-sm text-muted-foreground">{t("settings.aiNeedsClient")}</p>}
+        {cal.ai_booking && cal.status !== "published" && <p className="mb-0 text-sm text-muted-foreground">{t("settings.aiNeedsPublished")}</p>}
       </section>
 
       <section>

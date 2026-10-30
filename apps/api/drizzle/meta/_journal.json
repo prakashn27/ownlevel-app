@@ -78,6 +78,13 @@
       "when": 1793377788232,
       "tag": "0010_oauth_client",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793388474504,
+      "tag": "0011_ai_booking",
+      "breakpoints": true
     }
   ]
 }

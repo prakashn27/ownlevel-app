@@ -15,6 +15,8 @@ import {
   type Db,
 } from "@ownlevel/core";
 
+export { bookingTools, type BookingContext, type BookingTool } from "./booking";
+
 /** Verified by the MCP server from the OAuth token + live DB state; tools never see raw tokens. */
 export type ToolContext = {
   db: Db;

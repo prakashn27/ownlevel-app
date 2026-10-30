@@ -61,6 +61,8 @@ export const clients = pgTable(
     country: text("country"),
     /** Booking page address: /book/{slug}/{calendar slug}. Unique per agency. */
     slug: text("slug"),
+    /** Master switch: visitors' AI assistants may check times and book through the public MCP endpoint. Off until the client opts in. */
+    aiBooking: boolean("ai_booking").notNull().default(false),
     settings: jsonb("settings").notNull().default({}),
     status: text("status").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

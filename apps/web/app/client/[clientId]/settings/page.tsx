@@ -20,7 +20,8 @@ export default function Settings() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
-  const [booking, setBooking] = useState<{ slug: string | null; country: string | null; agency_country: string } | null>(null);
+  const [booking, setBooking] = useState<{ slug: string | null; country: string | null; agency_country: string; ai_booking: boolean; mcp_url: string | null } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSaved, setBookingSaved] = useState(false);
   useEffect(() => { void api<NonNullable<typeof booking>>(`/api/clients/${client.id}/booking-settings`).then((r) => r.ok && setBooking(r.data)); }, [client.id]);
@@ -29,7 +30,7 @@ export default function Settings() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setBookingError(null); setBookingSaved(false);
-    const r = await api<NonNullable<typeof booking>>(`/api/clients/${client.id}/booking-settings`, { method: "PATCH", body: { slug: f.get("slug"), country: f.get("country") || null } });
+    const r = await api<NonNullable<typeof booking>>(`/api/clients/${client.id}/booking-settings`, { method: "PATCH", body: { slug: f.get("slug"), country: f.get("country") || null, ai_booking: f.get("ai_booking") === "on" } });
     if (!r.ok) return setBookingError(r.error);
     setBooking(r.data); setBookingSaved(true);
   }
@@ -70,6 +71,17 @@ export default function Settings() {
             <p className="-mt-2 text-xs text-muted-foreground">{t("client.settings.bookingSlugHelp")}</p>
             <Label>{t("client.settings.country")}<CountrySelect name="country" defaultValue={booking.country ?? ""} emptyLabel={t("client.settings.useAgencyCountry", { country: booking.agency_country })} /></Label>
             <p className="-mt-2 text-xs text-muted-foreground">{t("client.settings.countryHelp")}</p>
+            <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="ai_booking" defaultChecked={booking.ai_booking} className="mt-1" /><span><b>{t("client.settings.aiBooking")}</b><br /><span className="text-muted-foreground">{t("client.settings.aiBookingHelp")}</span></span></label>
+            {booking.ai_booking && booking.mcp_url && (
+              <div>
+                <Label>{t("client.settings.aiLink")}</Label>
+                <div className="flex items-center gap-2">
+                  <Input readOnly value={booking.mcp_url} onFocus={(e) => e.target.select()} />
+                  <Button type="button" variant="outline" onClick={async () => { await navigator.clipboard.writeText(booking.mcp_url!); setCopied(true); setTimeout(() => setCopied(false), 2000); }}>{copied ? t("client.settings.copied") : t("client.settings.copy")}</Button>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{t("client.settings.aiLinkHelp")}</p>
+              </div>
+            )}
             {bookingError && <Alert variant="destructive">{bookingError}</Alert>}
             {bookingSaved && <Alert variant="success">{t("common.saved")}</Alert>}
             <div><Button>{t("client.settings.saveBooking")}</Button></div>

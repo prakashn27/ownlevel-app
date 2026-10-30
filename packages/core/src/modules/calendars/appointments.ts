@@ -20,6 +20,8 @@ import { MIN, bad, hostBusy, instant, iso, pgCode, text, uuid } from "./util.js"
 import { defaultCountry, linkContact, normalizePhone } from "./contacts.js";
 
 const MAX_RANGE_DAYS = 62;
+/** Upcoming bookings one email or phone may hold with a client when booking through AI assistants. */
+export const MAX_UPCOMING_PER_PERSON_AI = 3;
 const STATUSES = ["booked", "cancelled", "completed"];
 const ATTENDEE_STATUSES = ["cancelled", "no_show", "attended"];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -155,7 +157,8 @@ export type BookInput = {
   answers?: unknown[];
   /** Answers saved to contact fields, by contact field key. */
   mapped?: Record<string, unknown>;
-  source: "staff" | "public";
+  /** `mcp` = an AI assistant booking for a visitor through the public MCP endpoint; handled like `public`. */
+  source: "staff" | "public" | "mcp";
   userId: string | null;
   /** Public bookings: the calendar's required fixed fields, and an Idempotency-Key. */
   idempotencyKey?: string;
@@ -212,7 +215,7 @@ export async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Books inside the caller's transaction and tenant context. Public callers have no user; permissions were checked by the caller. */
 export async function book(tx: Tx, scope: { agencyId: string; clientId: string }, cal: Awaited<ReturnType<typeof loadCalendar>>, p: BookInput): Promise<Booked> {
-  const pub = p.source === "public";
+  const pub = p.source !== "staff";
   if (pub && p.idempotencyKey) {
     const [prior] = await tx.select().from(appointmentAttendees).where(and(eq(appointmentAttendees.clientId, scope.clientId), eq(appointmentAttendees.idempotencyKey, p.idempotencyKey)));
     if (prior) {
@@ -242,6 +245,20 @@ export async function book(tx: Tx, scope: { agencyId: string; clientId: string }
   const phone = p.attendee.phone ? normalizePhone(p.attendee.phone, country) : undefined;
   const attendeeInfo: AttendeeInfo = { name: p.attendee.name, ...(p.attendee.email ? { email: p.attendee.email } : {}), ...(phone ? { phone: phone.e164 } : {}), ...(p.attendee.timezone ? { timezone: p.attendee.timezone } : {}) };
 
+  // An AI assistant can't solve a captcha, so one person can only hold a few upcoming bookings per client.
+  if (p.source === "mcp") {
+    const who = [
+      attendeeInfo.email ? sql`${appointmentAttendees.attendee}->>'email' = ${attendeeInfo.email}` : undefined,
+      attendeeInfo.phone ? sql`${appointmentAttendees.attendee}->>'phone' = ${attendeeInfo.phone}` : undefined,
+    ].filter((x) => x !== undefined);
+    const [held] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(appointmentAttendees)
+      .innerJoin(appointments, eq(appointments.id, appointmentAttendees.appointmentId))
+      .where(and(eq(appointmentAttendees.clientId, scope.clientId), eq(appointmentAttendees.status, "booked"), gt(appointments.startsAt, new Date()), sql`(${sql.join(who, sql` or `)})`));
+    if (held!.n >= MAX_UPCOMING_PER_PERSON_AI) throw new DomainError("rate_limited", `This person already has ${MAX_UPCOMING_PER_PERSON_AI} upcoming bookings. Cancel one before booking another.`);
+  }
+
   const attendeeId = randomUUID();
   const secret = pub ? randomBytes(24).toString("base64url") : undefined;
   const row = {
@@ -258,7 +275,7 @@ export async function book(tx: Tx, scope: { agencyId: string; clientId: string }
   };
   const link = async () => {
     const actor = p.userId ? (await tx.select({ name: user.name }).from(user).where(eq(user.id, p.userId))).at(0) : undefined;
-    const l = await linkContact(tx, scope, { name: attendeeInfo.name, email: attendeeInfo.email, phone, mapped: p.mapped, source: pub ? "booking" : "staff", actor: { userId: p.userId, name: actor?.name ?? null } });
+    const l = await linkContact(tx, scope, { name: attendeeInfo.name, email: attendeeInfo.email, phone, mapped: p.mapped, source: p.source === "mcp" ? "mcp" : pub ? "booking" : "staff", actor: { userId: p.userId, name: actor?.name ?? null } });
     await tx.update(appointmentAttendees).set({ contactId: l.contactId }).where(eq(appointmentAttendees.id, attendeeId));
   };
   const done = async (appt: typeof appointments.$inferSelect): Promise<Booked> => {

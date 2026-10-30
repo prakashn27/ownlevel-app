@@ -73,7 +73,7 @@ export type PublicBooking = {
   replayed: boolean;
 };
 
-export async function bookPublic(db: Db, agencyId: string, clientSlug: string, calendarSlug: string, input: Record<string, unknown>, idempotencyKey?: string): Promise<PublicBooking> {
+export async function bookPublic(db: Db, agencyId: string, clientSlug: string, calendarSlug: string, input: Record<string, unknown>, idempotencyKey?: string, source: "public" | "mcp" = "public"): Promise<PublicBooking> {
   if (idempotencyKey !== undefined && !/^[A-Za-z0-9_-]{8,100}$/.test(idempotencyKey)) bad("Idempotency-Key must be 8 to 100 letters, digits, - or _.");
   const start = instant(input.starts_at, "starts_at");
   const a = input.attendee && typeof input.attendee === "object" ? (input.attendee as Record<string, unknown>) : bad("attendee is required.");
@@ -108,7 +108,7 @@ export async function bookPublic(db: Db, agencyId: string, clientSlug: string, c
       return book(tx, { agencyId, clientId: client.id }, cal, {
         calendarId, start, attendee: { name, ...(email ? { email } : {}), ...(phone ? { phone } : {}), ...(timezone ? { timezone } : {}) },
         phoneCountry: phoneCountry && /^[A-Z]{2}$/.test(phoneCountry) ? phoneCountry : undefined,
-        answers, mapped, source: "public", userId: null, idempotencyKey,
+        answers, mapped, source, userId: null, idempotencyKey,
       }).then((b) => ({ b, cal }));
     }),
   );

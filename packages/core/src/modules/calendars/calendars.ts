@@ -103,6 +103,7 @@ const shape = (c: CalendarRow, hosts: { userId: string; name: string; email: str
   slug: c.slug,
   description: c.description,
   status: c.status,
+  ai_booking: c.aiBooking,
   timezone: c.timezone,
   default_country: c.defaultCountry,
   require_email: c.requireEmail,
@@ -247,6 +248,11 @@ export async function updateCalendar(db: Db, scope: CalendarScope, id: string, i
   for (const [k, col, lo, hi] of num) { const v = integer(input[k], lo, hi, k); if (v !== undefined) (patch as Record<string, unknown>)[col] = v; }
   if (input.weekly_hours !== undefined) patch.weeklyHours = parseWeeklyHours(input.weekly_hours);
   if (input.booking_form !== undefined) patch.bookingForm = parseBookingForm(input.booking_form);
+  if (input.ai_booking !== undefined) {
+    const v = input.ai_booking;
+    if (typeof v !== "boolean") bad("ai_booking must be true or false.");
+    patch.aiBooking = v as boolean;
+  }
   if (input.status !== undefined) {
     if (!(STATUSES as readonly unknown[]).includes(input.status)) bad("status must be draft, published or archived.");
     patch.status = input.status as string;
@@ -254,7 +260,8 @@ export async function updateCalendar(db: Db, scope: CalendarScope, id: string, i
   if (!Object.keys(patch).length && !wantsRequired) bad("Nothing to update.");
 
   return withTenant(db, scope, async (tx) => {
-    await requireCalendars(tx, scope, input.status !== undefined ? "manage" : "configure");
+    // Publishing needs a manager; offering a calendar to AI assistants needs client settings rights.
+    await requireCalendars(tx, scope, input.status !== undefined ? "manage" : input.ai_booking !== undefined ? "clientSettings" : "configure");
     const row = await loadCalendar(tx, scope.clientId, id);
     if (patch.capacity !== undefined && row.type !== "class") bad("Only class calendars have a capacity.");
     if (wantsRequired) [patch.requireEmail, patch.requirePhone] = parseRequired(input.require_email, input.require_phone, row.requireEmail, row.requirePhone);

@@ -19,6 +19,15 @@
     "OAUTH_JWKS_URL": "https://api.ownlevel.app/api/auth/jwks"
   },
 
+  // Public booking endpoint (/book/...), per 60 seconds and per client, not per IP: assistants share their provider's
+  // IPs. Counted per Cloudflare location; they slow abuse, they are not exact.
+  "unsafe": {
+    "bindings": [
+      { "name": "AI_CLIENT_LIMITER", "type": "ratelimit", "namespace_id": "1011", "simple": { "limit": 300, "period": 60 } },
+      { "name": "AI_BOOK_LIMITER", "type": "ratelimit", "namespace_id": "1012", "simple": { "limit": 10, "period": 60 } }
+    ]
+  },
+
   // A route, not a custom domain: the web Worker's `*.ownlevel.app/*` route also matches this host, and the
   // more specific pattern here wins. Needs a proxied (orange-cloud) DNS record for `mcp` in zone ownlevel.app
   // (a dummy A 192.0.2.1 works).

@@ -1,4 +1,6 @@
+import { createBookingHandler, type BookingLimit } from "./booking-handler.js";
 import { createMcpHandler } from "./handler.js";
+import { db } from "./db.js";
 import { devAuthenticate } from "./dev-auth.js";
 import { protectedResourceMetadata, withOAuth, type OAuthConfig } from "./oauth-auth.js";
 
@@ -24,8 +26,11 @@ function build() {
   const dev = process.env.MCP_DEV_AUTH === "1" ? createMcpHandler({ authenticate: devAuthenticate(), resourceMetadataUrl: metadataUrl, audit }) : null;
   const oauthMcp = withOAuth(oauth, metadataUrl, (req, ctx) => createMcpHandler({ authenticate: async () => ctx, resourceMetadataUrl: metadataUrl, audit })(req));
 
-  return async (req: Request): Promise<Response> => {
+  return async (req: Request, limit?: BookingLimit): Promise<Response> => {
     const { pathname } = new URL(req.url);
+    // Public booking for visitors' AI assistants: no token, only what the client switched on.
+    const booking = pathname.match(/^\/book\/([^/]+)\/([^/]+)\/mcp\/?$/);
+    if (booking) return createBookingHandler({ db, limit })(req, decodeURIComponent(booking[1]!), decodeURIComponent(booking[2]!));
     if (pathname === "/health" || pathname === "/healthz") return new Response("ok");
     if (pathname === metadataPath || pathname === "/.well-known/oauth-protected-resource") return Response.json(protectedResourceMetadata(oauth));
     if (pathname === resourceUrl.pathname) {
@@ -38,4 +43,4 @@ function build() {
 
 let handler: ReturnType<typeof build> | undefined;
 /** The whole HTTP surface of the MCP server; shared by the Worker and the local Node server. */
-export const handle = (req: Request) => (handler ??= build())(req);
+export const handle = (req: Request, limit?: BookingLimit) => (handler ??= build())(req, limit);
