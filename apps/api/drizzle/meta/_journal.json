@@ -43,6 +43,13 @@
       "when": 1793304866334,
       "tag": "0005_oauth_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793371218551,
+      "tag": "0006_crm",
+      "breakpoints": true
     }
   ]
 }

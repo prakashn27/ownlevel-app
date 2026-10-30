@@ -478,3 +478,5 @@ Agency staff keep the existing agency-level install, which can reach several cli
 | Remove `endpoints/client` and `endpoints/partner` stubs for a single `/mcp` route | Open |
 
 Suggested order: appointments core, then the contact principal, then contact tools and the connect page. Before launch, work through the "Not verified" list in Production.
+
+

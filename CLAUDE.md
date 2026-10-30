@@ -25,6 +25,7 @@ Read only the doc relevant to the task:
 - [2_Authentication.md](docs/technical/2_Authentication.md): authn/authz, memberships, roles/permissions, sessions, hostnames and custom domains, OAuth apps, MCP token authorization.
 - [3_Deployment.md](docs/technical/3_Deployment.md): Cloudflare Workers deployment (web, API, MCP), Hyperdrive, traffic routing, Host-based tenant resolution.
 - [4_MCP.md](docs/technical/4_MCP.md): MCP server, tool registry (`packages/ai/tools`), scopes, audit, distributing MCP to client contacts.
+- [5_2_contacts.md](docs/technical/5_2_contacts.md): CRM and contacts: per-client typed fields, strict client-only RLS, record service, delete rules.
 - [8_Testing.md](docs/technical/8_Testing.md): RLS tests, API smoke script, manual and Workers runtime checks.
 
 ## Commits

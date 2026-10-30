@@ -53,10 +53,10 @@ create function app_client_id() returns uuid language sql stable as
   $$ select nullif(current_setting('app.client_id', true), '')::uuid $$;
 
 -- client-scoped table: client context sees its rows; agency context sees all its clients
-alter table contacts enable row level security;
-alter table contacts force row level security;
+alter table calendars enable row level security;
+alter table calendars force row level security;
 
-create policy contacts_tenant on contacts
+create policy calendars_tenant on calendars
   using (
     agency_id = app_agency_id()
     and (app_client_id() is null or client_id = app_client_id())
@@ -79,6 +79,8 @@ await db.transaction(async (tx) => {
 **As implemented** (`packages/core/src/db/tenant.ts`, migration `0003_rls.sql`): `withTenant(db, ctx, fn)` opens a transaction, sets `app.agency_id`, `app.client_id`, `app.user_id`, `app.host` and `app.slug` with `set_config(..., true)`, then runs `SET LOCAL ROLE app_user`. Policies read these through `app_agency_id()` and friends, and every table is `FORCE`d, so even the owner is filtered. Two narrow, read-only contexts exist for the moments before a tenant is known: `host` (exposes only the one active `agency_domains` row for that hostname, and its agency) and `slug` (availability check). A person can read their own `memberships` across agencies through `user_id`. System roles (`agency_id IS NULL`) are seeded by the migration; the app never writes them. Tested in `apps/api/test/rls.test.ts`.
 
 Agency context (no `client_id`) reads across the clients the user may reach; the app layer still narrows to assigned clients for `assigned` memberships. Writes always require a `client_id`.
+
+**Exception: CRM records** (contacts, companies, notes, tasks, timeline) use a stricter policy, `client_id = app_client_id()` with no agency-context branch, so agency context sees none of them. Agencies never see contacts across clients; see [5_2_contacts.md](./5_2_contacts.md#isolation-contacts-never-leave-the-client).
 
 ## Core schema
 
@@ -223,74 +225,9 @@ export const crmModule = defineModule({
 
 **CRM**
 
-```sql
-create table contacts (
-  id          uuid primary key default gen_random_uuid(),
-  agency_id   uuid not null,
-  client_id   uuid not null references clients(id) on delete cascade,
-  first_name  text,
-  last_name   text,
-  email       citext,
-  phone_e164  text,
-  owner_user_id uuid references users(id),
-  source      text,
-  tags        text[] not null default '{}',
-  custom      jsonb not null default '{}',     -- values keyed by custom_fields.key
-  dnd         jsonb not null default '{}',     -- per-channel do-not-disturb
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz
-);
-create unique index on contacts (client_id, email) where email is not null and deleted_at is null;
-create index on contacts (client_id, phone_e164);
-create index on contacts using gin (client_id, tags);  -- needs btree_gin
-create index on contacts using gin (custom jsonb_path_ops);
+The CRM is a metadata-driven module modelled on [Twenty](https://github.com/twentyhq/twenty): per-client field definitions (standard and custom, typed), standard objects (contacts, companies, notes, tasks), a timeline and saved views. Schema, field types and rules are in [5_2_contacts.md](./5_2_contacts.md). Opportunities and pipelines follow the same model and are designed later.
 
-create table custom_fields (
-  id         uuid primary key default gen_random_uuid(),
-  agency_id  uuid not null,
-  client_id  uuid not null references clients(id) on delete cascade,
-  object     text not null,                     -- contact | opportunity
-  key        text not null,
-  label      text not null,
-  type       text not null,                     -- text, number, date, select, multiselect
-  options    jsonb,
-  unique (client_id, object, key)
-);
-
-create table pipelines (
-  id         uuid primary key default gen_random_uuid(),
-  agency_id  uuid not null,
-  client_id  uuid not null references clients(id) on delete cascade,
-  name       text not null
-);
-
-create table pipeline_stages (
-  id          uuid primary key default gen_random_uuid(),
-  agency_id   uuid not null,
-  client_id   uuid not null,
-  pipeline_id uuid not null references pipelines(id) on delete cascade,
-  name        text not null,
-  position    int not null
-);
-
-create table opportunities (
-  id          uuid primary key default gen_random_uuid(),
-  agency_id   uuid not null,
-  client_id   uuid not null references clients(id) on delete cascade,
-  contact_id  uuid not null references contacts(id),
-  pipeline_id uuid not null references pipelines(id),
-  stage_id    uuid not null references pipeline_stages(id),
-  name        text not null,
-  value_cents bigint,
-  status      text not null default 'open',    -- open | won | lost | abandoned
-  owner_user_id uuid references users(id),
-  custom      jsonb not null default '{}',
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
-);
-create index on opportunities (client_id, pipeline_id, stage_id);
-```
+CRM records are the one exception to the tenancy policy above: they are visible **only in a client context**, never in agency context, and anything that references a contact does so with a composite foreign key `(client_id, contact_id) → contacts (client_id, id)`, so a reference can never cross clients.
 
 **Conversations**
 
@@ -309,7 +246,7 @@ create table conversations (
   id              uuid primary key default gen_random_uuid(),
   agency_id       uuid not null,
   client_id       uuid not null references clients(id) on delete cascade,
-  contact_id      uuid not null references contacts(id),
+  contact_id      uuid not null,  -- FK (client_id, contact_id) → contacts(client_id, id)
   assigned_user_id uuid references users(id),
   status          text not null default 'open',
   unread_count    int not null default 0,
@@ -355,7 +292,7 @@ create table appointments (
   agency_id    uuid not null,
   client_id    uuid not null references clients(id) on delete cascade,
   calendar_id  uuid not null references calendars(id),
-  contact_id   uuid not null references contacts(id),
+  contact_id   uuid not null,  -- FK (client_id, contact_id) → contacts(client_id, id)
   assigned_user_id uuid references users(id),
   starts_at    timestamptz not null,
   ends_at      timestamptz not null,
@@ -385,7 +322,7 @@ create table workflow_runs (
   client_id    uuid not null,
   workflow_id  uuid not null references workflows(id),
   workflow_version int not null,
-  contact_id   uuid references contacts(id),
+  contact_id   uuid,  -- FK (client_id, contact_id) → contacts(client_id, id)
   status       text not null,                   -- running, waiting, completed, failed
   current_step text,
   resume_at    timestamptz,                     -- for "wait 2 days" steps
@@ -428,7 +365,7 @@ create index on outbox_events (id) where published_at is null;
 create table webhook_subscriptions (
   id              uuid primary key default gen_random_uuid(),
   agency_id       uuid not null,
-  client_id       uuid,                   -- NULL = all clients of the agency
+  client_id       uuid,                   -- NULL = all clients of the agency (never gets CRM record events)
   installation_id uuid references app_installations(id),
   url             text not null,
   event_types     text[] not null,

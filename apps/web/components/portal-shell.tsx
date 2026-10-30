@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, LayoutDashboard, Users, UserCog, Palette, Building2, Settings, Eye, LogOut } from "lucide-react";
+import { ArrowLeft, Contact, LayoutDashboard, Users, UserCog, Palette, Building2, Settings, Eye, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -71,6 +71,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
   const nav = clientId
     ? [
         { href: `/client/${clientId}`, label: t("shell.nav.overview"), icon: Eye },
+        { href: `/client/${clientId}/contacts`, label: t("shell.nav.contacts"), icon: Contact },
         { href: `/client/${clientId}/people`, label: t("shell.nav.people"), icon: Users },
         { href: `/client/${clientId}/settings`, label: t("shell.nav.settings"), icon: Settings },
       ]

@@ -5,14 +5,22 @@ import {
   acceptInvitation,
   createAgency,
   createClient,
+  createField,
   createInvitation,
+  createRecord,
+  deleteField,
+  deleteRecord,
+  fieldUsage,
   getClient,
+  getMetadata,
+  getRecord,
   getTeam,
   hasAgencyMembership,
   inviteEmail,
   isSlugAvailable,
   listAgencyMemberships,
   listClients,
+  listRecords,
   previewInvitation,
   resolveHost,
   revokeInvitation,
@@ -20,6 +28,8 @@ import {
   sendEmail,
   updateBranding,
   updateClient,
+  updateField,
+  updateRecord,
 } from "@ownlevel/core";
 import { parseHost } from "@ownlevel/tenancy";
 import { eq } from "drizzle-orm";
@@ -85,8 +95,8 @@ app.post("/api/oauth/select-agency", async (c) => {
 app.onError((err, c) => {
   if (err instanceof DomainError) {
     const status =
-      err.code === "slug_taken" ? 409 : err.code === "not_found" ? 404 : err.code === "forbidden" ? 403 : err.code === "unauthorized" ? 401 : 400;
-    return c.json({ error: err.code, message: err.message }, status);
+      err.code === "slug_taken" || err.code === "conflict" ? 409 : err.code === "not_found" ? 404 : err.code === "forbidden" ? 403 : err.code === "unauthorized" ? 401 : 400;
+    return c.json({ error: err.code, message: err.message, ...err.details }, status);
   }
   console.error(err);
   return c.json({ error: "internal" }, 500);
@@ -240,3 +250,45 @@ app.post("/api/invitations/accept", async (c) => {
   await acceptInvitation(db, { ...ctx, userEmail: user.email }, String(body.token ?? ""));
   return c.json({ ok: true });
 });
+
+// ── CRM (contacts): client-scoped only. There is no agency-wide route; RLS would return nothing anyway. ──
+async function crmScope(c: Ctx) {
+  const { ctx } = await agencyCtx(c);
+  return { ...ctx, clientId: c.req.param("clientId") ?? "" };
+}
+
+app.get("/api/clients/:clientId/crm/metadata/:object", async (c) => c.json(await getMetadata(db, await crmScope(c), c.req.param("object"))));
+
+app.post("/api/clients/:clientId/crm/metadata/:object/fields", async (c) =>
+  c.json(await createField(db, await crmScope(c), c.req.param("object"), await jsonBody(c)), 201));
+
+app.get("/api/clients/:clientId/crm/metadata/:object/fields/:key/usage", async (c) =>
+  c.json(await fieldUsage(db, await crmScope(c), c.req.param("object"), c.req.param("key"))));
+
+app.patch("/api/clients/:clientId/crm/metadata/:object/fields/:key", async (c) =>
+  c.json(await updateField(db, await crmScope(c), c.req.param("object"), c.req.param("key"), await jsonBody(c))));
+
+app.delete("/api/clients/:clientId/crm/metadata/:object/fields/:key", async (c) =>
+  c.json(await deleteField(db, await crmScope(c), c.req.param("object"), c.req.param("key"))));
+
+app.get("/api/clients/:clientId/crm/:object", async (c) => {
+  const scope = await crmScope(c);
+  let filter: { key: string; op: string; value?: unknown }[] | undefined;
+  const raw = c.req.query("filter");
+  if (raw) {
+    try { filter = JSON.parse(raw); } catch { throw new DomainError("invalid_input", "filter must be JSON."); }
+    if (!Array.isArray(filter) || filter.some((f) => typeof f?.key !== "string" || typeof f?.op !== "string")) throw new DomainError("invalid_input", "filter must be a list of {key, op, value}.");
+  }
+  const limit = c.req.query("limit");
+  return c.json(await listRecords(db, scope, c.req.param("object"), { q: c.req.query("q"), filter, sort: c.req.query("sort"), cursor: c.req.query("cursor"), limit: limit ? Number(limit) : undefined }));
+});
+
+app.post("/api/clients/:clientId/crm/:object", async (c) => c.json(await createRecord(db, await crmScope(c), c.req.param("object"), await jsonBody(c)), 201));
+
+app.get("/api/clients/:clientId/crm/:object/:id", async (c) => c.json(await getRecord(db, await crmScope(c), c.req.param("object"), c.req.param("id"))));
+
+app.patch("/api/clients/:clientId/crm/:object/:id", async (c) =>
+  c.json(await updateRecord(db, await crmScope(c), c.req.param("object"), c.req.param("id"), await jsonBody(c))));
+
+/** Permanent: erases the record and everything about it. */
+app.delete("/api/clients/:clientId/crm/:object/:id", async (c) => c.json(await deleteRecord(db, await crmScope(c), c.req.param("object"), c.req.param("id"))));
