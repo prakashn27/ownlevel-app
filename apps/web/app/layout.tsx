@@ -23,6 +23,7 @@ export async function generateMetadata() {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const info = await getHostInfo();
   const locale = await getLocale();
+  const t = await getTranslations("meta");
   const style = (info.kind === "agency" && info.branding.primaryColor
     ? { "--brand": info.branding.primaryColor }
     : undefined) as CSSProperties | undefined;
@@ -33,6 +34,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <header className="flex items-center gap-2 border-b bg-card px-5 py-3">
             {info.branding.logoUrl && <img src={info.branding.logoUrl} alt="" height={28} className="h-7 w-auto" />}
             <strong className="font-semibold">{info.branding.appName ?? info.name}</strong>
+          </header>
+        )}
+        {info.kind !== "agency" && (
+          <header className="flex items-center gap-2 border-b bg-card px-5 py-3">
+            <img src="/logo.png" alt="" width={28} height={28} className="size-7" />
+            <strong className="font-semibold">{t("defaultTitle")}</strong>
           </header>
         )}
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
