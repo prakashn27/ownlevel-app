@@ -25,6 +25,8 @@ export const session = pgTable(
     // Agency picked for the MCP authorization in progress (see apps/api auth.ts).
     oauthAgencyId: text("oauth_agency_id"),
     oauthAgencyAt: timestamp("oauth_agency_at"),
+    /** Set when the MCP connection is for one client rather than the whole agency. */
+    oauthClientId: text("oauth_client_id"),
   },
   (t) => [index("session_user_id_idx").on(t.userId)],
 );

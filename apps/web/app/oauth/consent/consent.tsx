@@ -6,7 +6,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 
-const KNOWN_SCOPES = ["agency:settings", "clients:read", "clients:write", "calendars:write", "offline_access"] as const;
+const KNOWN_SCOPES = ["agency:settings", "clients:read", "clients:write", "calendars:write", "appointments:read", "offline_access"] as const;
 
 /** MCP authorization step: the user approves (or denies) what the connecting app may do. */
 export function Consent() {

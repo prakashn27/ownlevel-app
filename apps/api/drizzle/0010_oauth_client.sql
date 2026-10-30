@@ -1,0 +1,1 @@
+ALTER TABLE "session" ADD COLUMN "oauth_client_id" text;

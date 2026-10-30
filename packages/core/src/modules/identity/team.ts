@@ -58,6 +58,44 @@ export async function hasAgencyMembership(db: Db, userId: string, agencyId: stri
   });
 }
 
+/** Membership on this client, or agency-level in its agency (the same reach as requireCalendars). */
+export async function hasClientMembership(db: Db, userId: string, agencyId: string, clientId: string) {
+  if (!UUID.test(clientId)) return false;
+  return withTenant(db, { agencyId, userId }, async (tx) => {
+    const rows = await tx
+      .select({ clientId: memberships.clientId })
+      .from(memberships)
+      .innerJoin(clients, eq(clients.agencyId, memberships.agencyId))
+      .where(and(eq(memberships.userId, userId), eq(memberships.agencyId, agencyId), eq(clients.id, clientId)));
+    return rows.some((m) => m.clientId === null || m.clientId === clientId);
+  });
+}
+
+/** Where an MCP connection can act: agency-level memberships, and clients the user is a member of directly. */
+export async function listConnectTargets(db: Db, userId: string) {
+  const rows = await withTenant(db, { userId }, (tx) =>
+    tx
+      .select({ agencyId: memberships.agencyId, agencyName: agencies.name, clientId: memberships.clientId })
+      .from(memberships)
+      .innerJoin(agencies, eq(agencies.id, memberships.agencyId))
+      .where(eq(memberships.userId, userId)),
+  );
+  const clientRows = rows.filter((r) => r.clientId);
+  // Client names are only readable in that client's context.
+  const named = await Promise.all(
+    clientRows.map((r) =>
+      withTenant(db, { userId, agencyId: r.agencyId, clientId: r.clientId! }, async (tx) => {
+        const [c] = await tx.select({ name: clients.name, status: clients.status }).from(clients).where(eq(clients.id, r.clientId!));
+        return c && c.status === "active" ? { agencyId: r.agencyId, agencyName: r.agencyName, clientId: r.clientId!, name: c.name } : null;
+      }),
+    ),
+  );
+  return {
+    agencies: rows.filter((r) => !r.clientId).map((r) => ({ agencyId: r.agencyId, name: r.agencyName })),
+    clients: named.filter((c) => c !== null),
+  };
+}
+
 // ── Branding ──
 const clean = (v: unknown, max: number, label: string): string | undefined => {
   if (v === undefined || v === null) return undefined;

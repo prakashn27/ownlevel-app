@@ -171,9 +171,12 @@
   },
   "oauth": {
     "selectAgency": {
-      "title": "Choose an agency",
-      "description": "Which agency should this app connect to?",
+      "title": "Choose where to connect",
+      "description": "Which agency or client should this app connect to?",
       "none": "You don’t have access to any agency.",
+      "agencies": "Agencies",
+      "clients": "Clients",
+      "clientOf": "{client} ({agency})",
       "continue": "Continue"
     },
     "consent": {
@@ -187,6 +190,7 @@
         "clients:read": "See your agency’s clients",
         "clients:write": "Create clients",
         "calendars:write": "Create calendars for your clients",
+        "appointments:read": "See calendars, appointments and open times",
         "offline_access": "Stay connected until you revoke access"
       },
       "unknownScope": "{scope}"

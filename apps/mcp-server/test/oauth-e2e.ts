@@ -108,12 +108,39 @@ if (r.body.refresh_token) {
   const rr = await http(as.token_endpoint, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: r.body.refresh_token, client_id: clientId, resource: prm.resource }).toString() });
   check("refresh token works", !!rr.body.access_token, rr.body);
 }
-// 10. revocation: losing the membership stops a still-valid token immediately (needs a DB owner connection)
 const { Pool } = await import("pg");
 const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://ownlevel:ownlevel@localhost:5432/ownlevel" });
+
+// 10. client-level connection: pick one client; the token is bound to it and only client tools show
+const { rows: [client] } = await pool.query("insert into clients (agency_id, name, slug) values ($1, 'E2E Client', $2) returning id", [agencyId, `e2e-client-${run}`]);
+const v2 = randomBytes(32).toString("base64url");
+const q2 = new URLSearchParams({ response_type: "code", client_id: clientId, redirect_uri: REDIRECT, scope: "appointments:read", state: "c", code_challenge: createHash("sha256").update(v2).digest("base64url"), code_challenge_method: "S256", resource: prm.resource });
+r = await http(`${as.authorization_endpoint}?${q2}`);
+let q2s = new URL(nextUrl(r)).search.slice(1);
+r = await http(`${API}/api/oauth/select-agency`, { method: "POST", json: { agencyId, clientId: "00000000-0000-0000-0000-000000000000" } });
+check("cannot select a client outside the agency", r.status === 404, r.body);
+r = await http(`${API}/api/oauth/select-agency`, { method: "POST", json: { agencyId, clientId: client.id } });
+check("client selected", r.status === 200, r.body);
+r = await http(`${API}/api/auth/oauth2/continue`, { method: "POST", json: { postLogin: true, oauth_query: q2s } });
+q2s = new URL(r.body.url).search.slice(1);
+r = await http(`${API}/api/auth/oauth2/consent`, { method: "POST", json: { accept: true, oauth_query: q2s } });
+const code2 = new URL(r.body.url).searchParams.get("code")!;
+r = await http(as.token_endpoint, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code: code2, redirect_uri: REDIRECT, client_id: clientId, code_verifier: v2, resource: prm.resource }).toString() });
+const clientToken = r.body.access_token as string;
+const claims2 = clientToken ? JSON.parse(Buffer.from(clientToken.split(".")[1]!, "base64url").toString()) : {};
+check("client token carries tenant_client_id", claims2.agency_id === agencyId && claims2.tenant_client_id === client.id, claims2);
+m = await rpc(clientToken, "tools/list");
+const names = (m.body?.result?.tools ?? []).map((t: any) => t.name);
+check("client connection lists client tools only", names.includes("appointments_list") && !names.includes("agency_set_brand_color") && !names.includes("clients_create"), m);
+m = await rpc(clientToken, "tools/call", { name: "appointments_list", arguments: { date: "2030-01-15" } });
+check("client connection reads its appointments", m.body?.result?.isError === false, m);
+
+// 11. revocation: losing the membership stops a still-valid token immediately (needs a DB owner connection)
 await pool.query("delete from memberships where agency_id = $1", [agencyId]);
 m = await rpc(token, "tools/list");
 check("membership removed -> same token rejected", m.status === 401, m);
+m = await rpc(clientToken, "tools/list");
+check("membership removed -> client token rejected", m.status === 401, m);
 
 // cleanup: leave no test data behind
 await pool.query("delete from agencies where id = $1", [agencyId]);

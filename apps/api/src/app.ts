@@ -40,10 +40,12 @@ import {
   getRecord,
   getTeam,
   hasAgencyMembership,
+  hasClientMembership,
   inviteEmail,
   isSlugAvailable,
   listAgencyMemberships,
   listClients,
+  listConnectTargets,
   listRecords,
   previewInvitation,
   resolveHost,
@@ -105,14 +107,27 @@ app.use("/api/*", async (c, next) => {
   await next();
 });
 
-/** MCP authorization: the user picks which agency the connection acts on (agency-level memberships only). */
+/** MCP authorization: where the connection can act (agency-level memberships, and clients the user belongs to). */
+app.get("/api/oauth/targets", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "unauthorized" }, 401);
+  return c.json(await listConnectTargets(db, user.id));
+});
+
+/** MCP authorization: the user picks the agency, or one client (`clientId`), the connection acts on. */
 app.post("/api/oauth/select-agency", async (c) => {
   const user = c.get("user");
   const session = c.get("session");
   if (!user || !session) return c.json({ error: "unauthorized" }, 401);
-  const { agencyId } = (await c.req.json().catch(() => ({}))) as { agencyId?: unknown };
-  if (typeof agencyId !== "string" || !(await hasAgencyMembership(db, user.id, agencyId))) throw new DomainError("not_found", "Agency not found.");
-  await db.update(sessionTable).set({ oauthAgencyId: agencyId, oauthAgencyAt: new Date() }).where(eq(sessionTable.id, session.id));
+  const { agencyId, clientId } = (await c.req.json().catch(() => ({}))) as { agencyId?: unknown; clientId?: unknown };
+  if (typeof agencyId !== "string") throw new DomainError("not_found", "Agency not found.");
+  if (clientId !== undefined) {
+    if (typeof clientId !== "string" || !(await hasClientMembership(db, user.id, agencyId, clientId))) throw new DomainError("not_found", "Client not found.");
+  } else if (!(await hasAgencyMembership(db, user.id, agencyId))) throw new DomainError("not_found", "Agency not found.");
+  await db
+    .update(sessionTable)
+    .set({ oauthAgencyId: agencyId, oauthClientId: (clientId as string | undefined) ?? null, oauthAgencyAt: new Date() })
+    .where(eq(sessionTable.id, session.id));
   return c.json({ ok: true });
 });
 

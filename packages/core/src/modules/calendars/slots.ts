@@ -35,6 +35,18 @@ export function localDate(ms: number, tz: string) {
   return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
 }
 
+/** [from, to) instants covering `days` local days from `date` (YYYY-MM-DD) in `tz`. */
+export function localDaysRange(date: string, days: number, tz: string) {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  return { from: zonedToUtc(y, m, d, 0, 0, tz), to: zonedToUtc(y, m, d + days, 0, 0, tz) };
+}
+
+/** Wall-clock "YYYY-MM-DD HH:mm" of an instant in `tz`. */
+export function localDateTime(ms: number, tz: string) {
+  const p = parts(ms, tz);
+  return `${localDate(ms, tz)} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;
+}
+
 export type Range = { start: number; end: number };
 export type SlotHost = { userId: string; priority?: number; lastAssignedAt?: number | null };
 export type Slot = { start: string; end: string; hostIds: string[]; seatsLeft?: number };

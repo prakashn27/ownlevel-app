@@ -1,5 +1,19 @@
 import { z } from "zod";
-import { createCalendar, createClient, listClients, updateBrandColor, type Db } from "@ownlevel/core";
+import {
+  createCalendar,
+  createClient,
+  DomainError,
+  getCalendar,
+  getClientTimezone,
+  getSlots,
+  listAppointments,
+  listCalendars,
+  listClients,
+  localDateTime,
+  localDaysRange,
+  updateBrandColor,
+  type Db,
+} from "@ownlevel/core";
 
 /** Verified by the MCP server from the OAuth token + live DB state; tools never see raw tokens. */
 export type ToolContext = {
@@ -27,6 +41,17 @@ export type ToolDef<S extends z.ZodObject = z.ZodObject> = {
 };
 
 const defineTool = <S extends z.ZodObject>(t: ToolDef<S>) => t as unknown as ToolDef;
+
+/** The client a call acts on: fixed by a client-level connection (any client_id argument is ignored); an agency connection must name one. */
+function clientScope(ctx: ToolContext, clientId?: string) {
+  const id = ctx.level === "client" ? ctx.clientId : clientId;
+  if (!id) throw new DomainError("invalid_input", "client_id is required: pick one with clients_list.");
+  return { userId: ctx.userId, agencyId: ctx.agencyId, clientId: id };
+}
+
+const clientIdArg = z.string().optional().describe("Client id from clients_list. Required for agency connections, ignored for client connections.");
+const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.").describe("First local day, YYYY-MM-DD, in the client's timezone");
+const dayCount = z.number().int().min(1).max(31).optional().describe("Number of days from date (default 1)");
 
 export const tools: ToolDef[] = [
   defineTool({
@@ -94,6 +119,70 @@ export const tools: ToolDef[] = [
       const { client_id, ...input } = a as { client_id: string; name: string; type?: string };
       // Core checks the client belongs to the token's agency and the caller's role.
       return createCalendar(ctx.db, { ...ctx, clientId: client_id }, { type: "personal", ...input });
+    },
+  }),
+  defineTool({
+    name: "calendars_list",
+    description: "List the client's calendars (the services people can book), excluding archived ones.",
+    permission: "calendars:read",
+    scope: "appointments:read",
+    levels: ["agency", "client"],
+    sensitivity: "normal",
+    input: z.object({ client_id: clientIdArg }),
+    run: async (ctx, a) => {
+      const { items } = await listCalendars(ctx.db, clientScope(ctx, (a as { client_id?: string }).client_id));
+      return items.map((c) => ({ id: c.id, name: c.name, type: c.type, status: c.status, timezone: c.timezone, duration_min: c.duration_min, hosts: c.hosts }));
+    },
+  }),
+  defineTool({
+    name: "appointments_list",
+    description:
+      "List the client's booked and completed appointments on local days, all hosts by default. Times are returned in the client's timezone (local_start, local_end).",
+    permission: "calendars:read",
+    scope: "appointments:read",
+    levels: ["agency", "client"],
+    sensitivity: "normal",
+    input: z.object({
+      client_id: clientIdArg,
+      date: localDate,
+      days: dayCount,
+      mine: z.boolean().optional().describe("Only appointments the signed-in user hosts"),
+      calendar_id: z.string().optional(),
+    }),
+    run: async (ctx, a) => {
+      const args = a as { client_id?: string; date: string; days?: number; mine?: boolean; calendar_id?: string };
+      const scope = clientScope(ctx, args.client_id);
+      const timezone = await getClientTimezone(ctx.db, scope);
+      const { from, to } = localDaysRange(args.date, args.days ?? 1, timezone);
+      const { items, next_cursor } = await listAppointments(ctx.db, scope, {
+        from: new Date(from).toISOString(),
+        to: new Date(to).toISOString(),
+        status: "booked,completed",
+        calendarId: args.calendar_id,
+        hostId: args.mine ? ctx.userId : undefined,
+      });
+      return {
+        timezone,
+        appointments: items.map((i) => ({ ...i, local_start: localDateTime(Date.parse(i.starts_at), timezone), local_end: localDateTime(Date.parse(i.ends_at), timezone) })),
+        truncated: next_cursor !== null,
+      };
+    },
+  }),
+  defineTool({
+    name: "slots_find",
+    description: "Open booking times of one calendar on local days, in the calendar's timezone.",
+    permission: "calendars:read",
+    scope: "appointments:read",
+    levels: ["agency", "client"],
+    sensitivity: "normal",
+    input: z.object({ client_id: clientIdArg, calendar_id: z.string().describe("Calendar id from calendars_list"), date: localDate, days: dayCount }),
+    run: async (ctx, a) => {
+      const args = a as { client_id?: string; calendar_id: string; date: string; days?: number };
+      const scope = clientScope(ctx, args.client_id);
+      const { timezone } = await getCalendar(ctx.db, scope, args.calendar_id);
+      const { from, to } = localDaysRange(args.date, args.days ?? 1, timezone);
+      const r = await getSlots(ctx.db, scope, args.calendar_id, { from: new Date(from).toISOString(), to: new Date(to).toISOString() });
+      return { timezone, slots: r.slots.map((s) => ({ starts_at: s.start, local_start: localDateTime(Date.parse(s.start), timezone), seats_left: s.seatsLeft })) };
     },
   }),
 ];

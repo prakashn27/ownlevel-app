@@ -100,7 +100,7 @@ Contacts are the third principal and are **not built yet** (design in [Contact i
 }
 ```
 
-Built so far: `agency_set_brand_color` (calls `updateBrandColor`, which merges; `updateBranding` replaces the whole object, so do not use it for single-field changes), `clients_list`, `clients_create`, `calendars_create`.
+Built so far: `agency_set_brand_color` (calls `updateBrandColor`, which merges; `updateBranding` replaces the whole object, so do not use it for single-field changes), `clients_list`, `clients_create`, `calendars_create`, `calendars_list`, `appointments_list`, `slots_find`.
 
 ## Tool catalogue
 
@@ -109,7 +109,7 @@ One tool per core action; the LLM chains them. Tools never take identity (who bo
 | Audience, level | Example prompt | Tools | Scope |
 | --- | --- | --- | --- |
 | Agency staff, agency | "Create a client named Bloom Salon with a calendar" | `clients_list`, `clients_create` (`with_calendar`), `calendars_create` (`client_id`) | `clients:read`, `clients:write`, `calendars:write` |
-| Client staff, client (planned) | "What are my appointments tomorrow?" | `calendars_list`, `appointments_list` (`date`, `days`, `mine`), `slots_find` | `appointments:read` |
+| Client staff, client (agency staff too, with `client_id`) | "What are my appointments tomorrow?" | `calendars_list`, `appointments_list` (`date`, `days`, `mine`), `slots_find` | `appointments:read` |
 | Contact, client (planned) | "Book a haircut at 10 am tomorrow" | `services_list`, `slots_find`, `appointment_book`, `my_appointments`, `appointment_cancel` | `appointments:book` |
 
 Decisions:
@@ -168,7 +168,8 @@ The API (`apps/api`) is the authorization server; the MCP server (`apps/mcp-serv
 | Discovery: `/.well-known/oauth-authorization-server/api/auth` (forwarded to Better Auth) | `apps/api/src/app.ts` |
 | Discovery: `/.well-known/oauth-protected-resource/mcp` (RFC 9728) | `apps/mcp-server/src/server.ts` |
 | Login page, agency picker, consent page | `apps/web/app/login`, `app/oauth/select-agency`, `app/oauth/consent` |
-| Agency choice stored for the flow in progress | `POST /api/oauth/select-agency` -> `session.oauth_agency_id` (valid 5 minutes) |
+| Places the user can connect | `GET /api/oauth/targets`: agency-level memberships, and clients the user is a direct member of |
+| Agency (or client) choice stored for the flow in progress | `POST /api/oauth/select-agency` `{ agencyId, clientId? }` -> `session.oauth_agency_id`, `session.oauth_client_id` (valid 5 minutes; migration `0010`) |
 | JWT verification (JWKS, issuer, audience, expiry) + live membership check | `apps/mcp-server/src/oauth-auth.ts` |
 | Tables | `drizzle/0005_oauth_provider.sql` (`jwks`, `oauth_client`, `oauth_access_token`, `oauth_refresh_token`, `oauth_consent`, ...) |
 
@@ -197,13 +198,13 @@ sequenceDiagram
 
 How the pieces enforce the model:
 
-- **Agency choice.** The consent is stored per agency (`reference_id`), and the JWT carries `agency_id`. The token is never accepted for another agency, and the MCP server re-checks the membership on every request, so removing a member stops access before the token expires (10 minutes).
-- **Scopes.** Tool scopes are `agency:settings`, `clients:read`, `clients:write` and `calendars:write`; the 401 challenge lists them all so clients request them; `offline_access` issues a refresh token. Scopes are listed in `OAUTH_SCOPES` (`auth.ts`) and `SUPPORTED_SCOPES` (`oauth-auth.ts`); keep them in step with the registry.
+- **Agency or client choice.** The picker offers each agency (agency-level membership) and each client the user belongs to directly. The consent is stored per pick (`reference_id` is `<agencyId>` or `<agencyId>:<clientId>`), and the JWT carries `agency_id`, plus `tenant_client_id` for a client-level connection (not `client_id`: in JWT access tokens that claim names the OAuth app, RFC 9068). The token is never accepted for another agency or client, and the MCP server re-checks the membership on every request (`hasAgencyMembership`, or `hasClientMembership` for client tokens), so removing a member stops access before the token expires (10 minutes).
+- **Scopes.** Tool scopes are `agency:settings`, `clients:read`, `clients:write`, `calendars:write` and `appointments:read`; the 401 challenge lists them all so clients request them; `offline_access` issues a refresh token. Scopes are listed in `OAUTH_SCOPES` (`auth.ts`) and `SUPPORTED_SCOPES` (`oauth-auth.ts`); keep them in step with the registry.
 - **Client registration.** Production clients identify themselves with Client ID Metadata Documents (`@better-auth/cimd`, on by default). Dynamic registration is for local testing only and is off unless `OAUTH_OPEN_REGISTRATION=1` (set in `apps/api/.env.example`).
 - **Loopback redirects.** Clients that register `http://127.0.0.1:<port>/...` or `localhost` redirect URIs must send `application_type: "native"`; the server rejects them for `web` clients.
 - **Grant types.** `authorization_code` and `refresh_token` only; `client_credentials` is disabled until installation tokens exist.
 - **Issuer.** `BETTER_AUTH_URL` + `/api/auth` on the API, `OAUTH_ISSUER` on the MCP server; they must match. In production this is the platform origin (see Production).
-- **Known gaps.** One platform-level authorization server (the login page is the platform host, not each agency's branded host). The consent page does not yet show which agency was picked. Agency-level installs only; no client picker.
+- **Known gaps.** One platform-level authorization server (the login page is the platform host, not each agency's branded host). The consent page does not yet show which agency or client was picked, and lists every requested scope even when the pick's level hides some tools.
 
 ## Production
 
@@ -297,7 +298,7 @@ MCP_DEV_AUTH=1 pnpm --filter @ownlevel/mcp-server dev   # :4100/mcp, plain Node 
 # or in the Workers runtime: pnpm --filter @ownlevel/mcp-server cf:dev
 ```
 
-**2. Automated end-to-end check** (plays browser and MCP client: sign-up, agency, registration, PKCE, picker, consent, token, tool call, refresh)
+**2. Automated end-to-end check** (plays browser and MCP client: sign-up, agency, registration, PKCE, picker, consent, token, tool call, refresh, a client-level connection, revocation)
 
 ```bash
 pnpm --filter @ownlevel/mcp-server test:oauth
@@ -318,7 +319,7 @@ Then ask: "Set my agency's brand color to #0ea5e9." or "Create a client named Bl
 **Dev token** (curl only; refused when `NODE_ENV=production`, and only accepted when `MCP_DEV_AUTH=1`)
 
 ```
-Authorization: Bearer dev:<userId>:<agencyId>[:scope,scope]    # default: all supported scopes
+Authorization: Bearer dev:<userId>:<agencyId>[/<clientId>][:scope,scope]    # /<clientId> = client-level connection; default: all supported scopes
 ```
 
 Identity is still checked against real memberships, and core enforces the role on every call. Use it with the rows from step 4 below and the raw HTTP check at the end.
@@ -509,7 +510,7 @@ The contact's email is matched to a `contacts` row with the booking rules in [5_
 | `notifications/tools/list_changed` | Needs stateful sessions or SSE |
 | Appointments schema and core (`getSlots`, `book`, `cancelAll`, no double booking) | Done (calendars module) |
 | Agency tools: `clients_list`, `clients_create` (with default calendar), `calendars_create` | Done |
-| Client-level install (client picker at consent), `appointments_list`, `slots_find` | Not started |
+| Client-level install (client picker at consent, `tenant_client_id` claim), `calendars_list`, `appointments_list`, `slots_find` | Done; verified by `test:oauth` and dev tokens |
 | Contact principal (`user.kind`, email OTP, `contact_logins`, contact-scoped RLS) | Not started; SMS OTP later |
 | Contact tools and the client's "connect your AI" page | Not started |
 | Remove `endpoints/client` and `endpoints/partner` stubs for a single `/mcp` route | Open |

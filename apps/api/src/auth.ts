@@ -19,16 +19,29 @@ import { env } from "./env.js";
 import { hostConfig } from "./host.js";
 
 /** Scopes an MCP connection can be granted. Mirrors the `scope` of tools in packages/ai/tools. */
-export const OAUTH_SCOPES = ["agency:settings", "clients:read", "clients:write", "calendars:write", "offline_access"] as const;
+export const OAUTH_SCOPES = ["agency:settings", "clients:read", "clients:write", "calendars:write", "appointments:read", "offline_access"] as const;
 
 const SELECTION_TTL_MS = 5 * 60 * 1000;
 
-/** The agency picked for the authorization in progress. Short-lived so a stale pick is never reused. */
-function selectedAgencyId(session: Record<string, unknown>): string | undefined {
+/**
+ * The agency (and optionally one client) picked for the authorization in progress, as the consent reference:
+ * `<agencyId>` or `<agencyId>:<clientId>`. Short-lived so a stale pick is never reused.
+ */
+function selectedReference(session: Record<string, unknown>): string | undefined {
   const id = session.oauthAgencyId;
   const at = session.oauthAgencyAt;
   if (typeof id !== "string" || !(at instanceof Date || typeof at === "string")) return undefined;
-  return Date.now() - new Date(at).getTime() <= SELECTION_TTL_MS ? id : undefined;
+  if (Date.now() - new Date(at).getTime() > SELECTION_TTL_MS) return undefined;
+  return typeof session.oauthClientId === "string" ? `${id}:${session.oauthClientId}` : id;
+}
+
+/**
+ * Token claims from the consent reference: the agency, plus the client for client-level connections.
+ * Not `client_id`: in JWT access tokens (RFC 9068) that names the OAuth app.
+ */
+function referenceClaims(referenceId: string) {
+  const [agencyId, clientId] = referenceId.split(":");
+  return clientId ? { agency_id: agencyId, tenant_client_id: clientId } : { agency_id: agencyId };
 }
 
 async function sendReset(userId: string, to: string, token: string, request: Request | undefined) {
@@ -77,6 +90,7 @@ export const auth = betterAuth({
     additionalFields: {
       oauthAgencyId: { type: "string", required: false, input: false },
       oauthAgencyAt: { type: "date", required: false, input: false },
+      oauthClientId: { type: "string", required: false, input: false },
     },
   },
   // The JWT plugin's own /token is replaced by the OAuth provider's /oauth2/token.
@@ -96,17 +110,17 @@ export const auth = betterAuth({
       allowDynamicClientRegistration: env.oauthOpenRegistration,
       allowUnauthenticatedClientRegistration: env.oauthOpenRegistration,
       clientRegistrationAllowedScopes: [...OAUTH_SCOPES],
-      // The user picks which agency this connection acts on; consent is stored per agency.
+      // The user picks the agency, or one client, this connection acts on; consent is stored per pick.
       postLogin: {
         page: `${env.webUrl}/oauth/select-agency`,
-        shouldRedirect: ({ session, isContinuation }) => (isContinuation ? !selectedAgencyId(session) : true),
+        shouldRedirect: ({ session, isContinuation }) => (isContinuation ? !selectedReference(session) : true),
         consentReferenceId: ({ session }) => {
-          const id = selectedAgencyId(session);
+          const id = selectedReference(session);
           if (!id) throw new Error("no agency selected");
           return id;
         },
       },
-      customAccessTokenClaims: ({ referenceId }) => (referenceId ? { agency_id: referenceId } : {}),
+      customAccessTokenClaims: ({ referenceId }) => (referenceId ? referenceClaims(referenceId) : {}),
     }),
     // Production clients identify themselves by an https metadata URL instead of registering.
     ...(env.oauthCimd ? [cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" })] : []),

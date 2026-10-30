@@ -71,6 +71,13 @@
       "when": 1793375406922,
       "tag": "0009_contact_rule",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793377788232,
+      "tag": "0010_oauth_client",
+      "breakpoints": true
     }
   ]
 }

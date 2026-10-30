@@ -12,6 +12,14 @@ export const getBookingSettings = (db: Db, scope: CalendarScope) =>
     return { slug: c!.slug, country: c!.country, agency_country: c!.agency, effective_country: c!.country ?? c!.agency, reserved: [...RESERVED] };
   });
 
+/** The client's timezone, for turning local dates into ranges. Anyone who can read calendars may read it. */
+export const getClientTimezone = (db: Db, scope: CalendarScope) =>
+  withTenant(db, scope, async (tx) => {
+    await requireCalendars(tx, scope, "read");
+    const [c] = await tx.select({ timezone: clients.timezone }).from(clients).where(eq(clients.id, scope.clientId));
+    return c!.timezone;
+  });
+
 export async function updateBookingSettings(db: Db, scope: CalendarScope, input: Record<string, unknown>) {
   const patch: { slug?: string; country?: string | null } = {};
   if (input.slug !== undefined) patch.slug = parseSlug(input.slug);

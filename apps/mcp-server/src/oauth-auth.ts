@@ -1,10 +1,10 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { hasAgencyMembership } from "@ownlevel/core";
+import { hasAgencyMembership, hasClientMembership } from "@ownlevel/core";
 import type { ToolContext } from "@ownlevel/ai/tools";
 import { db } from "./db.js";
 
 /** Scopes tools can require; advertised in 401 challenges and protected-resource metadata. */
-export const SUPPORTED_SCOPES = ["agency:settings", "clients:read", "clients:write", "calendars:write", "offline_access"];
+export const SUPPORTED_SCOPES = ["agency:settings", "clients:read", "clients:write", "calendars:write", "appointments:read", "offline_access"];
 
 export type OAuthConfig = {
   /** Authorization server issuer (the API's Better Auth base URL incl. /api/auth). */
@@ -53,8 +53,12 @@ export function withOAuth(c: OAuthConfig, metadataUrl: string, next: (req: Reque
     }
     const userId = claims.sub;
     const agencyId = typeof claims.agency_id === "string" ? claims.agency_id : undefined;
+    const clientId = typeof claims.tenant_client_id === "string" ? claims.tenant_client_id : undefined;
     const scopes = typeof claims.scope === "string" ? claims.scope.split(" ") : [];
-    if (!userId || !agencyId || !(await hasAgencyMembership(db, userId, agencyId).catch(() => false))) return next(req, null);
-    return next(req, { db, userId, agencyId, level: "agency", scopes });
+    if (!userId || !agencyId) return next(req, null);
+    // Client-level connections are re-checked against the client, agency-level ones against the agency.
+    const member = clientId ? hasClientMembership(db, userId, agencyId, clientId) : hasAgencyMembership(db, userId, agencyId);
+    if (!(await member.catch(() => false))) return next(req, null);
+    return next(req, clientId ? { db, userId, agencyId, level: "client", clientId, scopes } : { db, userId, agencyId, level: "agency", scopes });
   };
 }
