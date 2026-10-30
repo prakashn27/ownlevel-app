@@ -86,6 +86,7 @@ export function BookingPage({ clientSlug, calendarSlug, turnstileSiteKey }: { cl
     e.preventDefault();
     if (!slot) return;
     const f = new FormData(e.currentTarget);
+    if (!f.get("phone") && !f.get("email")) return setError(t("needOne"));
     setError(null); setPending(true);
     const res = await fetch(`${url(clientSlug, calendarSlug)}/book`, {
       method: "POST",
@@ -109,6 +110,7 @@ export function BookingPage({ clientSlug, calendarSlug, turnstileSiteKey }: { cl
   if (missing) return <p className="mx-auto mt-12 max-w-md px-4 text-muted-foreground">{t("notFound")}</p>;
   if (!page) return <p className="mx-auto mt-12 max-w-md px-4 text-muted-foreground">{t("loading")}</p>;
 
+  const either = !page.require_phone && !page.require_email; // phone or email, at least one
   const time = (iso: string) => format.dateTime(new Date(iso), { timeStyle: "short", timeZone: tz });
 
   if (done)
@@ -174,15 +176,16 @@ export function BookingPage({ clientSlug, calendarSlug, turnstileSiteKey }: { cl
               <Button type="button" variant="ghost" size="sm" onClick={() => setSlot(null)}>←</Button>
             </div>
             <h2 className="m-0 text-base">{t("details")}</h2>
+            {either && <p className="m-0 text-sm text-muted-foreground">{t("eitherHint")}</p>}
             <div className="flex flex-col gap-1.5"><Label htmlFor="b-name">{t("name")}</Label><Input id="b-name" name="name" required maxLength={120} autoComplete="name" /></div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="b-phone">{t("phone")}{!page.require_phone && <span className="text-muted-foreground"> ({t("optional")})</span>}</Label>
+              <Label htmlFor="b-phone">{t("phone")}{!page.require_phone && !either && <span className="text-muted-foreground"> ({t("optional")})</span>}</Label>
               <div className="flex gap-2">
                 <CountrySelect value={country} onChange={setCountry} className="w-40 shrink-0" />
                 <Input id="b-phone" name="phone" type="tel" required={page.require_phone} autoComplete="tel-national" />
               </div>
             </div>
-            <div className="flex flex-col gap-1.5"><Label htmlFor="b-email">{t("email")}{!page.require_email && <span className="text-muted-foreground"> ({t("optional")})</span>}</Label><Input id="b-email" name="email" type="email" required={page.require_email} autoComplete="email" /></div>
+            <div className="flex flex-col gap-1.5"><Label htmlFor="b-email">{t("email")}{!page.require_email && !either && <span className="text-muted-foreground"> ({t("optional")})</span>}</Label><Input id="b-email" name="email" type="email" required={page.require_email} autoComplete="email" /></div>
             {page.booking_form.map((f) => (
               <div key={f.key} className="flex flex-col gap-1.5">
                 <Label htmlFor={`b-${f.key}`}>{f.label}{!f.required && <span className="text-muted-foreground"> ({t("optional")})</span>}</Label>

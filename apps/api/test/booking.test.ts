@@ -133,7 +133,7 @@ describe("public booking page", () => {
     await updateCalendar(db, owner(), draft.id, { status: "published" });
     const page = await getPublicCalendar(db, A.id, slug1, draft.slug);
     assert.deepEqual(page.hosts, [{ name: U.host1 }]);
-    assert.equal(page.require_phone, true);
+    assert.equal(page.require_phone, false); // default: phone or email
     await updateCalendar(db, owner(), draft.id, { status: "archived" });
     await assert.rejects(getPublicCalendar(db, A.id, slug1, draft.slug), code("not_found"));
   });
@@ -152,12 +152,15 @@ describe("public booking page", () => {
   });
 
   it("rejects a missing required field, and honours relaxed requirements", async () => {
-    const cal = await mk("personal", { host_ids: [U.host1] });
+    const cal = await mk("personal", { host_ids: [U.host1], require_email: true, require_phone: true });
     await assert.rejects(book(cal, { starts_at: at("09:00", 8), attendee: { name: "N", email: `n-${run}@test.local` } }), /Phone is required/);
     await assert.rejects(book(cal, { starts_at: at("09:00", 8), attendee: { name: "N", phone: "4155550100" } }), /Email is required/);
-    await assert.rejects(updateCalendar(db, owner(), cal.id, { require_email: false, require_phone: false }), code("invalid_input"));
     await updateCalendar(db, owner(), cal.id, { require_email: false });
     assert.ok((await book(cal, { starts_at: at("09:00", 8), attendee: { name: "N", phone: "4155550100" } })).manage_token);
+    // "phone or email": neither is required, but one must be given
+    await updateCalendar(db, owner(), cal.id, { require_email: false, require_phone: false });
+    await assert.rejects(book(cal, { starts_at: at("10:00", 8), attendee: { name: "N" } }), /phone number or an email/);
+    assert.ok((await book(cal, { starts_at: at("10:00", 8), attendee: { name: "N", email: `either-${run}@test.local` } })).manage_token);
     await assert.rejects(book(cal, { starts_at: at("09:30", 8), attendee: { name: "N", phone: "12" } }), /possible phone/);
   });
 

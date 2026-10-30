@@ -19,6 +19,16 @@ import { FormBuilder } from "./form-builder";
 type Person = { user_id: string; name: string; email: string };
 type Hours = Partial<Record<Day, [string, string][]>>;
 
+/** What a visitor must give besides their name. Either = phone or email, at least one. */
+const CONTACT_RULES = {
+  either: { require_phone: false, require_email: false },
+  both: { require_phone: true, require_email: true },
+  phone: { require_phone: true, require_email: false },
+  email: { require_phone: false, require_email: true },
+} as const;
+type Rule = keyof typeof CONTACT_RULES;
+const ruleOf = (c: Calendar): Rule => (c.require_phone && c.require_email ? "both" : c.require_phone ? "phone" : c.require_email ? "email" : "either");
+
 export default function CalendarEditor() {
   const { client } = useClient();
   const { id } = useParams<{ id: string }>();
@@ -58,7 +68,7 @@ export default function CalendarEditor() {
     void patch({
       name: f.get("name"), slug: f.get("slug"), description: f.get("description") || null, timezone: f.get("timezone") || undefined,
       duration_min: n("duration_min"), slot_interval_min: n("slot_interval_min"), buffer_before_min: n("buffer_before_min"), buffer_after_min: n("buffer_after_min"),
-      default_country: f.get("default_country") || null, require_email: f.get("require_email") === "on", require_phone: f.get("require_phone") === "on",
+      default_country: f.get("default_country") || null, ...CONTACT_RULES[String(f.get("contact_rule")) as Rule],
       min_notice_min: n("min_notice_min"), max_days_ahead: n("max_days_ahead"), ...(cal?.type === "class" ? { capacity: n("capacity") } : {}),
     }, t("settings.saved"));
   }
@@ -113,9 +123,11 @@ export default function CalendarEditor() {
             <div className="flex flex-col gap-1.5"><Label htmlFor="c-mn">{t("settings.minNotice")}</Label><Input id="c-mn" name="min_notice_min" type="number" min={0} max={43200} defaultValue={cal.min_notice_min} required /></div>
             <div className="flex flex-col gap-1.5"><Label htmlFor="c-md">{t("settings.maxDaysAhead")}</Label><Input id="c-md" name="max_days_ahead" type="number" min={1} max={365} defaultValue={cal.max_days_ahead} required /></div>
             <div className="flex flex-col gap-1.5 sm:col-span-2"><Label htmlFor="c-country">{t("settings.defaultCountry")}</Label><CountrySelect id="c-country" name="default_country" defaultValue={cal.default_country ?? ""} emptyLabel={t("settings.useClientCountry")} /></div>
-            <div className="flex flex-wrap items-center gap-4 sm:col-span-2 text-sm">
-              <label className="flex items-center gap-1.5"><input type="checkbox" name="require_phone" defaultChecked={cal.require_phone} />{t("settings.requirePhone")}</label>
-              <label className="flex items-center gap-1.5"><input type="checkbox" name="require_email" defaultChecked={cal.require_email} />{t("settings.requireEmail")}</label>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="c-rule">{t("settings.contactRule")}</Label>
+              <select id="c-rule" name="contact_rule" defaultValue={ruleOf(cal)} className="h-9 rounded-md border border-input bg-background px-3 text-sm">
+                {(Object.keys(CONTACT_RULES) as Rule[]).map((k) => <option key={k} value={k}>{t(`settings.contactRules.${k}`)}</option>)}
+              </select>
               <span className="text-xs text-muted-foreground">{t("settings.requireHelp")}</span>
             </div>
             <div className="sm:col-span-2"><Button>{t("settings.saveDetails")}</Button></div>

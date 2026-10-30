@@ -64,6 +64,13 @@
       "when": 1793374084442,
       "tag": "0008_booking",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793375406922,
+      "tag": "0009_contact_rule",
+      "breakpoints": true
     }
   ]
 }

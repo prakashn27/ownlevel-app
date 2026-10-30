@@ -71,13 +71,13 @@ export function parseCountry(v: unknown) {
   return c;
 }
 
-/** Name is always asked; phone and email are both required by default, and at least one must stay required. */
+/**
+ * Name is always asked. Phone and email are each required or optional; when neither is required, a booking
+ * must still give one of the two (so it can be matched to a contact). That "phone or email" rule is the default.
+ */
 function parseRequired(email: unknown, phone: unknown, curEmail: boolean, curPhone: boolean): [boolean, boolean] {
   for (const v of [email, phone]) if (v !== undefined && typeof v !== "boolean") bad("require_email and require_phone must be true or false.");
-  const e = (email as boolean | undefined) ?? curEmail;
-  const p = (phone as boolean | undefined) ?? curPhone;
-  if (!e && !p) bad("Require at least one of email or phone, so a booking can be matched to a contact.");
-  return [e, p];
+  return [(email as boolean | undefined) ?? curEmail, (phone as boolean | undefined) ?? curPhone];
 }
 
 const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50).replace(/-+$/, "");
@@ -188,7 +188,7 @@ export async function createCalendar(db: Db, scope: CalendarScope, input: Record
   const explicitSlug = input.slug === undefined ? undefined : parseSlug(input.slug);
   const tz = timezone(input.timezone);
   const country = parseCountry(input.default_country);
-  const [requireEmail, requirePhone] = parseRequired(input.require_email, input.require_phone, true, true);
+  const [requireEmail, requirePhone] = parseRequired(input.require_email, input.require_phone, false, false);
   const duration = integer(input.duration_min, 5, 480, "duration_min") ?? 30;
   const interval = integer(input.slot_interval_min, 5, 480, "slot_interval_min") ?? Math.min(duration, 30);
   const capacity = integer(input.capacity, 1, 1000, "capacity");

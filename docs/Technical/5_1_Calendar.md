@@ -296,7 +296,7 @@ type BookingField = {
 };
 ```
 
-- Name, phone and email are fixed fields. Name is always required. Phone and email are both required by default; the client may make one of them optional, but at least one must be required, because the contact match needs it. A booking can't be created with neither.
+- Name, phone and email are fixed fields. Name is always required. Each calendar chooses what else visitors must give: **phone or email, at least one** (the default for new calendars), phone and email, phone only (email optional), or email only (phone optional). `require_phone` and `require_email` hold the choice; with both false, the booking must still give one of the two, because the contact match needs it (migration `0009_contact_rule.sql` dropped the old check). Existing calendars keep their previous setting.
 - Submitted answers are validated on the server against the calendar's current form. Unknown keys are dropped.
 - Limits: at most 20 custom fields, labels up to 120 characters, text values up to 2,000 characters.
 - **Contact fields:** a form field can point at a CRM contact field, `{ contactFieldKey: "company_size" }`. It takes its type, options and validation from the CRM field, and only fields marked `contact_input` can be chosen. The answer is written to the contact on booking (see [Contacts](#contacts)). Fields without it only live on the appointment.

@@ -417,9 +417,7 @@
       "readOnly": "You can view this calendar but not change it.",
       "bookingForm": "Booking form",
       "bookingFormHelp": "Name is always asked. Choose what else visitors provide. Fields linked to a contact field are saved to the contact.",
-      "requirePhone": "Require phone",
-      "requireEmail": "Require email",
-      "requireHelp": "At least one of phone or email must be required, so a booking can be matched to a contact.",
+      "requireHelp": "Name is always asked. A phone number or email is needed so the booking can be matched to a contact.",
       "defaultCountry": "Phone country",
       "useClientCountry": "Use the client's",
       "fieldLabel": "Question",
@@ -448,7 +446,14 @@
       "pageDraft": "Publish the calendar to open the page.",
       "copy": "Copy link",
       "copied": "Copied",
-      "embed": "Embed on a website"
+      "embed": "Embed on a website",
+      "contactRule": "What visitors must give",
+      "contactRules": {
+        "either": "Phone or email (at least one)",
+        "both": "Phone and email",
+        "phone": "Phone required, email optional",
+        "email": "Email required, phone optional"
+      }
     }
   },
   "booking": {
@@ -489,6 +494,8 @@
       "cancelled": "This booking has been cancelled.",
       "cannotCancel": "This booking can no longer be cancelled online.",
       "notFound": "We couldn't find this booking."
-    }
+    },
+    "eitherHint": "Give a phone number or an email, at least one.",
+    "needOne": "Give a phone number or an email."
   }
 }

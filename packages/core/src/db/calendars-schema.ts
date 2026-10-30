@@ -29,9 +29,9 @@ export const calendars = pgTable(
     timezone: text("timezone").notNull(),
     /** Phone default country for the booking page; null = the client's, then the agency's. */
     defaultCountry: text("default_country"),
-    /** Fixed booking fields. Name is always required; at least one of these must be (migration check). */
-    requireEmail: boolean("require_email").notNull().default(true),
-    requirePhone: boolean("require_phone").notNull().default(true),
+    /** Fixed booking fields. Name is always required. With neither required, a booking must give a phone or an email. */
+    requireEmail: boolean("require_email").notNull().default(false),
+    requirePhone: boolean("require_phone").notNull().default(false),
     durationMin: integer("duration_min").notNull().default(30),
     slotIntervalMin: integer("slot_interval_min").notNull().default(30),
     capacity: integer("capacity"),

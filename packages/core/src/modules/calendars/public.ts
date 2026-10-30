@@ -90,7 +90,7 @@ export async function bookPublic(db: Db, agencyId: string, clientSlug: string, c
       const cal = await loadCalendar(tx, client.id, calendarId);
       if (cal.requireEmail && !email) bad("Email is required.");
       if (cal.requirePhone && !phone) bad("Phone is required.");
-      if (!email && !phone) bad("Give an email or a phone number.");
+      if (!email && !phone) bad("Give a phone number or an email.");
       const country = phoneCountry ?? (await defaultCountry(tx, client.id, cal.defaultCountry));
       const form = parseBookingForm(cal.bookingForm);
       const { answers, mapped } = validateAnswers(form, input.answers, (v) => normalizePhone(v, country).e164);
