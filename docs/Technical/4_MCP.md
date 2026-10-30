@@ -83,7 +83,7 @@ A failure at any layer looks the same to the client (`Tool not found` or 401), s
 | Client staff | `user` + client membership | Client | Client staff tools for that one client |
 | Contact (the client's customer) | `contacts` row, no `user`, no role | Client | Contact tools for that one client, own data only |
 
-Contacts are the third principal and are **not modelled in auth yet**. Staff identity, `withTenant` and RLS are keyed on `userId` and `agencyId` today.
+Contacts are the third principal and are **not built yet** (design in [Contact identity](#contact-identity)). Staff identity, `withTenant` and RLS are keyed on `userId` and `agencyId` today.
 
 ## Tool registry
 
@@ -100,7 +100,25 @@ Contacts are the third principal and are **not modelled in auth yet**. Staff ide
 }
 ```
 
-Built so far: `agency_set_brand_color` (calls `updateBrandColor`, which merges; `updateBranding` replaces the whole object, so do not use it for single-field changes).
+Built so far: `agency_set_brand_color` (calls `updateBrandColor`, which merges; `updateBranding` replaces the whole object, so do not use it for single-field changes), `clients_list`, `clients_create`, `calendars_create`.
+
+## Tool catalogue
+
+One tool per core action; the LLM chains them. Tools never take identity (who books, who is "me") as an argument: it comes from the token.
+
+| Audience, level | Example prompt | Tools | Scope |
+| --- | --- | --- | --- |
+| Agency staff, agency | "Create a client named Bloom Salon with a calendar" | `clients_list`, `clients_create` (`with_calendar`), `calendars_create` (`client_id`) | `clients:read`, `clients:write`, `calendars:write` |
+| Client staff, client (planned) | "What are my appointments tomorrow?" | `calendars_list`, `appointments_list` (`date`, `days`, `mine`), `slots_find` | `appointments:read` |
+| Contact, client (planned) | "Book a haircut at 10 am tomorrow" | `services_list`, `slots_find`, `appointment_book`, `my_appointments`, `appointment_cancel` | `appointments:book` |
+
+Decisions:
+
+- **"With a calendar" creates a default calendar.** There is no per-client module switch. `clients_create` with `with_calendar: true` creates the client, then a draft personal calendar named after the client with default hours and no host. The two steps are separate transactions: if the calendar fails, the client stays and the result says so.
+- **`appointments_list` returns all of the client's appointments**; `mine: true` limits it to appointments the caller hosts.
+- **Dates are local.** Tools take `date: "2025-06-12"` and the server resolves the range in the client's (or calendar's) timezone. LLMs must not compute UTC ranges.
+- **Contacts book published calendars only**, the same rule as the public booking page. Name and email come from the contact's identity, never from arguments.
+- **Write tools carry MCP annotations** (`readOnlyHint`, `destructiveHint`) so Claude and ChatGPT ask before writing. Elicitation support varies by client, so it is not the only safeguard.
 
 ## Request flow
 
@@ -180,7 +198,7 @@ sequenceDiagram
 How the pieces enforce the model:
 
 - **Agency choice.** The consent is stored per agency (`reference_id`), and the JWT carries `agency_id`. The token is never accepted for another agency, and the MCP server re-checks the membership on every request, so removing a member stops access before the token expires (10 minutes).
-- **Scopes.** `agency:settings` is the only tool scope today; `offline_access` issues a refresh token. Scopes are listed in `OAUTH_SCOPES` (`auth.ts`) and `SUPPORTED_SCOPES` (`oauth-auth.ts`); keep them in step with the registry.
+- **Scopes.** Tool scopes are `agency:settings`, `clients:read`, `clients:write` and `calendars:write`; the 401 challenge lists them all so clients request them; `offline_access` issues a refresh token. Scopes are listed in `OAUTH_SCOPES` (`auth.ts`) and `SUPPORTED_SCOPES` (`oauth-auth.ts`); keep them in step with the registry.
 - **Client registration.** Production clients identify themselves with Client ID Metadata Documents (`@better-auth/cimd`, on by default). Dynamic registration is for local testing only and is off unless `OAUTH_OPEN_REGISTRATION=1` (set in `apps/api/.env.example`).
 - **Loopback redirects.** Clients that register `http://127.0.0.1:<port>/...` or `localhost` redirect URIs must send `application_type: "native"`; the server rejects them for `web` clients.
 - **Grant types.** `authorization_code` and `refresh_token` only; `client_credentials` is disabled until installation tokens exist.
@@ -235,7 +253,7 @@ Design decisions that matter in production:
 curl https://mcp.ownlevel.app/healthz                                   # ok
 curl -i -X POST https://mcp.ownlevel.app/mcp -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-# 401 with: WWW-Authenticate: Bearer resource_metadata="https://mcp.ownlevel.app/.well-known/oauth-protected-resource/mcp", scope="agency:settings"
+# 401 with: WWW-Authenticate: Bearer resource_metadata="https://mcp.ownlevel.app/.well-known/oauth-protected-resource/mcp", scope="agency:settings clients:read clients:write calendars:write offline_access"
 curl https://app.ownlevel.app/.well-known/oauth-authorization-server/api/auth   # has client_id_metadata_document_supported: true
 ```
 
@@ -295,12 +313,12 @@ It creates a throwaway user and agency each run (`oauth-<ts>@e2e.test`, `e2e-<ts
 | MCP Inspector | `npx @modelcontextprotocol/inspector`, choose Streamable HTTP, URL `http://localhost:4100/mcp`, then use its OAuth flow. |
 | Claude Desktop, ChatGPT connectors | Need an HTTPS URL for both servers (tunnel both, and set `BETTER_AUTH_URL`, `MCP_PUBLIC_URL`, `MCP_ORIGIN`, `OAUTH_ISSUER`, `WEB_ORIGINS` to the public URLs). Not tested yet. |
 
-Then ask: "Set my agency's brand color to #0ea5e9." If a client fails at registration with `invalid_redirect_uri`, it is sending a loopback redirect without `application_type: "native"` (see above).
+Then ask: "Set my agency's brand color to #0ea5e9." or "Create a client named Bloom Salon with a calendar." If a client fails at registration with `invalid_redirect_uri`, it is sending a loopback redirect without `application_type: "native"` (see above).
 
 **Dev token** (curl only; refused when `NODE_ENV=production`, and only accepted when `MCP_DEV_AUTH=1`)
 
 ```
-Authorization: Bearer dev:<userId>:<agencyId>[:scope,scope]    # default scope: agency:settings
+Authorization: Bearer dev:<userId>:<agencyId>[:scope,scope]    # default: all supported scopes
 ```
 
 Identity is still checked against real memberships, and core enforces the role on every call. Use it with the rows from step 4 below and the raw HTTP check at the end.
@@ -364,7 +382,7 @@ Do these in order. Steps 1 to 3 are read-only; step 4 changes one agency setting
 curl https://mcp.ownlevel.app/healthz     # expect: ok  (an HTML 404 page means the request hit the web Worker: see Troubleshooting)
 curl -i -X POST https://mcp.ownlevel.app/mcp -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-# expect: 401 and  WWW-Authenticate: Bearer resource_metadata="https://mcp.ownlevel.app/.well-known/oauth-protected-resource/mcp", scope="agency:settings"
+# expect: 401 and  WWW-Authenticate: Bearer resource_metadata="https://mcp.ownlevel.app/.well-known/oauth-protected-resource/mcp", scope="agency:settings clients:read clients:write calendars:write offline_access"
 ```
 
 **2. Discovery chain is consistent**
@@ -439,9 +457,11 @@ sequenceDiagram
 
 Design:
 
+Decided: one connector per client, email sign-in, Better Auth reused for contacts but kept strictly apart from staff (see [Contact identity](#contact-identity)).
+
 1. **Same server, same registry.** Add `audience` to `ToolDef`. Contact tools are `levels: ['client']`, `audience: ['contact']`: `appointments_list_slots`, `appointments_book`, `appointments_cancel`, `appointments_mine`. Staff tools never appear for contacts, and the reverse.
 2. **`ToolContext` becomes a union.** Staff: `userId` and a live role. Contact: `contactId` and `clientId`. Contact tools take no `client_id` argument; the install fixes it.
-3. **Contact sign-in.** Passwordless email OTP on the client's branded host. Verifying it finds or creates the `contacts` row; the token subject is that contact. The consent screen offers only contact scopes (for example `appointments:book`).
+3. **Contact sign-in.** Passwordless email OTP (Better Auth `emailOTP` plugin) on the client's branded host. Verifying it finds or creates the `contacts` row; the token subject is that contact's login. The consent screen offers only contact scopes (for example `appointments:book`). TODO (later): SMS OTP for contacts with a phone but no email, using the same E.164 matching as bookings.
 4. **Distribution.** The client shares a connect URL (host-based, for example `https://app.clientbrand.com/mcp`, or `/client/:slug/mcp`), a QR code, and a copy-paste snippet. The URL's client must match the token's client. Client ID Metadata Documents avoid manual client registration.
 5. **Data isolation.** Add RLS policies keyed on an `app.contact_id` setting so a contact can only touch rows with their own `contact_id`. Do not rely on application code alone.
 6. **Abuse controls.** Per-contact rate limits, a client-level switch to enable or disable contact MCP, and confirmation before booking. `outbound` and `destructive` tools use MCP elicitation so the LLM must confirm ("Haircut, Thu 3:00 PM?") with the user.
@@ -459,6 +479,21 @@ A contact-level token is bound to exactly one client. A contact who uses several
 
 Agency staff keep the existing agency-level install, which can reach several clients (see 2_Authentication.md). This rule applies to contacts only.
 
+### Contact identity
+
+Contacts reuse Better Auth (sessions, OAuth, JWT, JWKS) but are a separate kind of account that can never act as staff.
+
+| Rule | How |
+| --- | --- |
+| A login is either staff or contact, fixed at creation | `user.kind` (`staff` default, `contact`), set only by the contact OTP sign-in path |
+| Contact logins never get staff access | A database trigger rejects `memberships` rows for `kind = 'contact'`; invitations to a contact email are refused |
+| Staff logins never act as contacts | Contact sign-in refuses an email that belongs to a `staff` login (the person uses another email); staff login and the agency picker refuse `contact` logins |
+| Token says which kind | Contact tokens carry `kind: "contact"` and `client_id`, no `agency_id` picker; the MCP server builds a contact `ToolContext` only from those, a staff context only from staff tokens |
+| Link to the CRM row | `contact_logins (user_id, client_id, contact_id)`, created at first sign-in for that client; re-checked on every request, so deleting the contact or the link revokes access |
+| Data isolation | `withContact` sets `app.contact_id` (never `app.user_id`); contact RLS policies match only rows with that `contact_id`, and staff policies never match a contact context |
+
+The contact's email is matched to a `contacts` row with the booking rules in [5_1_Calendar.md](./5_1_Calendar.md#contacts) (create one if none). Changing the contact's email in the CRM does not break the link, which is by id.
+
 ## Status and roadmap
 
 | Item | State |
@@ -472,11 +507,13 @@ Agency staff keep the existing agency-level install, which can reach several cli
 | `audit_log` writes | `modules/audit` is a stub |
 | Approval flow for `outbound` / `destructive` | Not started |
 | `notifications/tools/list_changed` | Needs stateful sessions or SSE |
-| Appointments schema and core (`listSlots`, `book`, `cancel`, no double booking) | Not started; also powers the calendar view |
-| Contact principal (OTP, contact-scoped RLS) | Not started |
+| Appointments schema and core (`getSlots`, `book`, `cancelAll`, no double booking) | Done (calendars module) |
+| Agency tools: `clients_list`, `clients_create` (with default calendar), `calendars_create` | Done |
+| Client-level install (client picker at consent), `appointments_list`, `slots_find` | Not started |
+| Contact principal (`user.kind`, email OTP, `contact_logins`, contact-scoped RLS) | Not started; SMS OTP later |
 | Contact tools and the client's "connect your AI" page | Not started |
 | Remove `endpoints/client` and `endpoints/partner` stubs for a single `/mcp` route | Open |
 
-Suggested order: appointments core, then the contact principal, then contact tools and the connect page. Before launch, work through the "Not verified" list in Production.
+Suggested order: agency tools, then the client-level install and appointment tools, then audit and tool annotations, then the contact principal, contact tools and the connect page. Before launch, work through the "Not verified" list in Production.
 
 

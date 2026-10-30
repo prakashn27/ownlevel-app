@@ -19,7 +19,7 @@ import { env } from "./env.js";
 import { hostConfig } from "./host.js";
 
 /** Scopes an MCP connection can be granted. Mirrors the `scope` of tools in packages/ai/tools. */
-export const OAUTH_SCOPES = ["agency:settings", "offline_access"] as const;
+export const OAUTH_SCOPES = ["agency:settings", "clients:read", "clients:write", "calendars:write", "offline_access"] as const;
 
 const SELECTION_TTL_MS = 5 * 60 * 1000;
 

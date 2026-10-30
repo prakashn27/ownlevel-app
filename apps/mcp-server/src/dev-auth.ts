@@ -2,6 +2,7 @@ import { hasAgencyMembership } from "@ownlevel/core";
 import type { ToolContext } from "@ownlevel/ai/tools";
 import type { McpDeps } from "./handler.js";
 import { db } from "./db.js";
+import { SUPPORTED_SCOPES } from "./oauth-auth.js";
 
 /**
  * LOCAL TESTING ONLY (curl without a browser). Token: `dev:<userId>:<agencyId>[:scope,scope]`.
@@ -18,7 +19,7 @@ export function devAuthenticate(): McpDeps["authenticate"] {
     const [userId, agencyId, scopes] = token.split(":");
     if (!userId || !agencyId) return null;
     if (!(await hasAgencyMembership(db, userId, agencyId).catch(() => false))) return null;
-    const ctx: ToolContext = { db, userId, agencyId, level: "agency", scopes: scopes ? scopes.split(",") : ["agency:settings"] };
+    const ctx: ToolContext = { db, userId, agencyId, level: "agency", scopes: scopes ? scopes.split(",") : SUPPORTED_SCOPES };
     return ctx;
   };
 }

@@ -184,6 +184,9 @@
       "deny": "Deny",
       "scope": {
         "agency:settings": "Change your agency’s settings (for example, brand color)",
+        "clients:read": "See your agency’s clients",
+        "clients:write": "Create clients",
+        "calendars:write": "Create calendars for your clients",
         "offline_access": "Stay connected until you revoke access"
       },
       "unknownScope": "{scope}"

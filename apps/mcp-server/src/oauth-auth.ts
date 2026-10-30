@@ -4,7 +4,7 @@ import type { ToolContext } from "@ownlevel/ai/tools";
 import { db } from "./db.js";
 
 /** Scopes tools can require; advertised in 401 challenges and protected-resource metadata. */
-export const SUPPORTED_SCOPES = ["agency:settings", "offline_access"];
+export const SUPPORTED_SCOPES = ["agency:settings", "clients:read", "clients:write", "calendars:write", "offline_access"];
 
 export type OAuthConfig = {
   /** Authorization server issuer (the API's Better Auth base URL incl. /api/auth). */
@@ -38,7 +38,7 @@ export function withOAuth(c: OAuthConfig, metadataUrl: string, next: (req: Reque
       status: 401,
       headers: {
         "content-type": "application/json",
-        "www-authenticate": `Bearer${error ? ` error="${error}",` : ""} resource_metadata="${metadataUrl}", scope="agency:settings"`,
+        "www-authenticate": `Bearer${error ? ` error="${error}",` : ""} resource_metadata="${metadataUrl}", scope="${SUPPORTED_SCOPES.join(" ")}"`,
       },
     });
 
