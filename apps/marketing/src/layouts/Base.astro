@@ -1,5 +1,5 @@
 ---
-import { getLocale, useTranslations, brand, appUrl, home, industriesIndex, blogIndex } from "../i18n/utils";
+import { getLocale, useTranslations, brand, appUrl, home, industriesIndex, blogIndex, pricingUrl } from "../i18n/utils";
 import { hreflang, type Locale } from "../i18n/ui";
 
 interface Props {
@@ -83,6 +83,7 @@ const jsonLd = { "@context": "https://schema.org", "@type": "Organization", name
       <nav class="wrap">
         <a class="brand" href={home(locale)}><img src="/logo-sm.png" srcset="/logo-sm.png 2x" width="32" height="32" alt="" />{brand}</a>
         <a href={industriesIndex(locale)}>{t("nav.industries")}</a>
+        <a href={pricingUrl(locale)}>{t("nav.pricing")}</a>
         <a href={blogIndex()} hreflang="en">{t("nav.blog")}</a>
         {alternates?.[other]
           ? <a href={alternates[other]} hreflang={hreflang[other]} lang={hreflang[other]}>{t("lang.switch")}</a>

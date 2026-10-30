@@ -1,0 +1,36 @@
+---
+import Base from "../layouts/Base.astro";
+import { useTranslations, pricingUrl, appUrl } from "../i18n/utils";
+import type { Locale } from "../i18n/ui";
+
+const { locale } = Astro.props as { locale: Locale };
+const t = useTranslations(locale);
+const plans = [
+  { name: t("pricing.p1.name"), accounts: t("pricing.p1.accounts"), price: 29 },
+  { name: t("pricing.p2.name"), accounts: t("pricing.p2.accounts"), price: 99 },
+  { name: t("pricing.p3.name"), accounts: t("pricing.p3.accounts"), price: 199 },
+];
+---
+<Base
+  title={t("pricing.title")}
+  description={t("pricing.sub")}
+  alternates={{ en: pricingUrl("en"), fr: pricingUrl("fr") }}
+>
+  <div class="wrap">
+    <h1>{t("pricing.title")}</h1>
+    <p>{t("pricing.sub")}</p>
+    <div class="grid">
+      {plans.map((p) => (
+        <div class="card">
+          <h3>{p.name}</h3>
+          <p class="price"><strong>${p.price}</strong> {t("pricing.perMonth")}</p>
+          <p>{p.accounts}</p>
+          <a class="btn" href={`${appUrl}/signup`}>{t("pricing.cta")}</a>
+        </div>
+      ))}
+    </div>
+  </div>
+  <style>
+    .price { margin:.25rem 0; } .price strong { font-size:2.25rem; color:var(--ink); }
+  </style>
+</Base>
