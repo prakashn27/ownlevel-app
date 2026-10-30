@@ -1,6 +1,6 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, or } from "drizzle-orm";
 import { slugify } from "@ownlevel/tenancy";
-import { agencies, clients, withTenant, type Db } from "../../db/index.js";
+import { agencies, clients, memberships, roles, withTenant, type Db } from "../../db/index.js";
 import { DomainError } from "../../errors.js";
 import { RESERVED } from "../calendars/calendars.js";
 import { assertClient, requireRole } from "../identity/team.js";
@@ -44,10 +44,28 @@ export const listClients = (db: Db, ctx: Scope) =>
     return tx.select(columns).from(clients).where(eq(clients.agencyId, ctx.agencyId)).orderBy(asc(clients.name));
   });
 
+/** Clients the user belongs to directly (client-level memberships) in this agency. Empty for agency staff. */
+export const listMyClients = (db: Db, ctx: Scope) =>
+  withTenant(db, ctx, (tx) =>
+    tx
+      .select({ clientId: clients.id, name: clients.name, status: clients.status, role: roles.key })
+      .from(memberships)
+      .innerJoin(clients, eq(clients.id, memberships.clientId))
+      .innerJoin(roles, eq(roles.id, memberships.roleId))
+      .where(and(eq(memberships.userId, ctx.userId), eq(memberships.agencyId, ctx.agencyId), isNotNull(memberships.clientId)))
+      .orderBy(asc(clients.name)),
+  );
+
+/** One client. Agency staff, or a member of that client (404 otherwise, so existence isn't revealed). */
 export const getClient = (db: Db, ctx: Scope, clientId: string) =>
   withTenant(db, ctx, async (tx) => {
-    await requireRole(tx, ctx.userId, ctx.agencyId, ANY_AGENCY_ROLE);
     await assertClient(tx, ctx.agencyId, clientId);
+    const mine = await tx
+      .select({ role: roles.key })
+      .from(memberships)
+      .innerJoin(roles, eq(roles.id, memberships.roleId))
+      .where(and(eq(memberships.userId, ctx.userId), eq(memberships.agencyId, ctx.agencyId), or(isNull(memberships.clientId), eq(memberships.clientId, clientId))));
+    if (!mine.length) throw new DomainError("not_found", "Client not found.");
     const [c] = await tx.select(columns).from(clients).where(and(eq(clients.id, clientId), eq(clients.agencyId, ctx.agencyId)));
     return c!;
   });

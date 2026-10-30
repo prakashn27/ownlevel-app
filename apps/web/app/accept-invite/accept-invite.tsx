@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
@@ -73,6 +74,7 @@ function Flow() {
             <Input name="password" type="password" minLength={8} required
               placeholder={preview.hasAccount ? t("yourPassword") : t("choosePassword")} />
             {error && <Alert variant="destructive">{error}</Alert>}
+            {preview.hasAccount && <p className="text-sm"><Link href="/forgot-password">{t("forgotPassword")}</Link></p>}
             <Button disabled={pending}>{preview.hasAccount ? t("signInAndAccept") : t("createAndAccept")}</Button>
           </form>
         </>

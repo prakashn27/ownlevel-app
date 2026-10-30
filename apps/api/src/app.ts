@@ -46,6 +46,7 @@ import {
   listAgencyMemberships,
   listClients,
   listConnectTargets,
+  listMyClients,
   listRecords,
   previewInvitation,
   resolveHost,
@@ -167,7 +168,9 @@ app.get("/api/me", async (c) => {
   const resolved = await resolveHost(db, c.get("host"), hostConfig);
   if (!resolved) return c.json({ error: "not_found" }, 404);
   const agencies = await listAgencyMemberships(db, user.id, resolved.kind === "agency" ? resolved.agencyId : undefined);
-  return c.json({ id: user.id, email: user.email, name: user.name, agencies });
+  // Clients the user belongs to directly (client_admin / client_user), only on an agency host.
+  const clients = resolved.kind === "agency" ? await listMyClients(db, { userId: user.id, agencyId: resolved.agencyId }) : [];
+  return c.json({ id: user.id, email: user.email, name: user.name, agencies, clients });
 });
 
 /** Agency signup. Only on a platform host; the owner is the session user. */

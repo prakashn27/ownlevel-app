@@ -12,7 +12,12 @@ import { authClient } from "../lib/auth-client";
 import { api } from "../lib/api";
 import { CLIENTS_CHANGED } from "../lib/clients-events";
 
-type Me = { name: string; email: string; agencies: { agencyId: string; name: string; role: string }[] };
+type Me = {
+  name: string;
+  email: string;
+  agencies: { agencyId: string; name: string; role: string }[];
+  clients: { clientId: string; name: string; status: string; role: string }[];
+};
 
 type Client = { id: string; name: string; status: string };
 type HostBranding = { branding?: { clientLabel?: string } };
@@ -36,9 +41,16 @@ export function PortalShell({ children }: { children: ReactNode }) {
     if (!isPending && !session) router.replace("/login");
   }, [isPending, session, router]);
 
+  // Client-only members have no agency membership: they see just the clients they belong to.
+  const clientOnly = !!me && me.agencies.length === 0 && me.clients.length > 0;
+
   const loadClients = useCallback(() => {
     api<Client[]>("/api/clients").then((r) => r.ok && setClients(r.data));
   }, []);
+
+  useEffect(() => {
+    if (clientOnly && !path.startsWith("/client/")) router.replace(`/client/${me!.clients[0]!.clientId}`);
+  }, [clientOnly, path, router, me]);
 
   useEffect(() => {
     if (!session) return;
@@ -54,7 +66,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
 
   if (isPending || !session || !me) return <div className="mx-auto mt-12 max-w-sm px-4 text-sm text-muted-foreground">{t("common.loading")}</div>;
 
-  if (me.agencies.length === 0)
+  if (me.agencies.length === 0 && me.clients.length === 0)
     return (
       <div className="mx-auto mt-12 flex max-w-sm flex-col items-start gap-3 px-4">
         <p>{t("shell.noAccess")}</p>
@@ -63,17 +75,18 @@ export function PortalShell({ children }: { children: ReactNode }) {
     );
 
   const clientId = path.match(/^\/client\/([^/]+)/)?.[1];
-  const client = clientId ? clients.find((c) => c.id === clientId) : undefined;
+  const visibleClients: Client[] = clientOnly ? me.clients.map((c) => ({ id: c.clientId, name: c.name, status: c.status })) : clients;
+  const client = clientId ? visibleClients.find((c) => c.id === clientId) : undefined;
   const label = clientLabel ?? t("common.defaultClientLabel");
   const labelLower = label.toLowerCase();
-  const agencyName = me.agencies[0]!.name;
+  const agencyName = me.agencies[0]?.name ?? "";
 
   const nav = clientId
     ? [
         { href: `/client/${clientId}`, label: t("shell.nav.overview"), icon: Eye },
         { href: `/client/${clientId}/contacts`, label: t("shell.nav.contacts"), icon: Contact },
         { href: `/client/${clientId}/calendars`, label: t("shell.nav.calendars"), icon: CalendarDays },
-        { href: `/client/${clientId}/people`, label: t("shell.nav.people"), icon: Users },
+        ...(clientOnly ? [] : [{ href: `/client/${clientId}/people`, label: t("shell.nav.people"), icon: Users }]),
         { href: `/client/${clientId}/settings`, label: t("shell.nav.settings"), icon: Settings },
       ]
     : [
@@ -83,7 +96,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
         { href: "/settings/branding", label: t("shell.nav.branding"), icon: Palette },
       ];
   // Archived clients stay out of the picker, except the one currently open.
-  const pickable = clients.filter((c) => c.status === "active" || c.id === clientId);
+  const pickable = visibleClients.filter((c) => c.status === "active" || c.id === clientId);
 
   return (
     <div>
@@ -111,7 +124,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
             clientId ? "border-primary/25 bg-primary/5" : "bg-card",
           )}
         >
-          {clientId && (
+          {clientId && !clientOnly && (
             <Link href="/clients" className="mb-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft className="size-4" /> {t("shell.backToAgency")}
             </Link>

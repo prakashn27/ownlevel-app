@@ -58,6 +58,25 @@ export async function hasAgencyMembership(db: Db, userId: string, agencyId: stri
   });
 }
 
+/** True when the email has an unused, unrevoked, unexpired invitation to this agency. */
+export async function hasPendingInvitation(db: Db, agencyId: string, email: string) {
+  return withTenant(db, { agencyId }, async (tx) => {
+    const [i] = await tx
+      .select({ id: invitations.id })
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.agencyId, agencyId),
+          eq(invitations.email, email.toLowerCase()),
+          isNull(invitations.acceptedAt),
+          isNull(invitations.revokedAt),
+          gt(invitations.expiresAt, new Date()),
+        ),
+      );
+    return !!i;
+  });
+}
+
 /** Membership on this client, or agency-level in its agency (the same reach as requireCalendars). */
 export async function hasClientMembership(db: Db, userId: string, agencyId: string, clientId: string) {
   if (!UUID.test(clientId)) return false;

@@ -62,6 +62,7 @@
     "signedInAs": "You’re signed in as {current}. This invitation is for {invited}.",
     "yourName": "Your name",
     "yourPassword": "Your password",
+    "forgotPassword": "Forgot password?",
     "choosePassword": "Choose a password",
     "signInAndAccept": "Sign in and accept",
     "createAndAccept": "Create account and accept"
