@@ -222,7 +222,8 @@ Type names are in snake case. Standard fields store composite types in columns n
 | `actor` | `{source, user_id, name}`; source = `staff`, `booking`, `import`, `api`, `mcp`, `workflow`, `contact` | system only | is |
 | `position` | float | system only | n/a (sort) |
 
-- **Canonical values.** Emails are lowercased, phones stored as E.164 parts (parsed with the client's default country), currency as integer micros, `null` and `""` never stored (empty = key absent).
+- **Numbers without `+`** are read in the default country, so `4155550123` is accepted in a US client and rejected only if it isn't a possible number there.
+- **Canonical values.** Emails are lowercased, phones stored as E.164 parts (parsed with the default country: field setting, then `clients.country`, then `agencies.country`; see [5_1_Calendar.md](./5_1_Calendar.md#phone-numbers-and-default-country); the country and calling code are filled in from the number), currency as integer micros, `null` and `""` never stored (empty = key absent).
 - **Options use ids**, so renaming an option label never touches stored values. Removing an option in use asks whether to clear it from those records.
 - **Relations** are standard only for now (`contact.company` ↔ `company.contacts`). Custom relation fields come with custom objects (see below).
 - **Dates and times** display with `useFormatter` in the client's timezone.

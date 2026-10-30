@@ -6,3 +6,4 @@ export * from "./modules/domains/index.js";
 export * from "./modules/email/index.js";
 export * from "./modules/clients/index.js";
 export * from "./modules/crm/index.js";
+export * from "./modules/calendars/index.js";

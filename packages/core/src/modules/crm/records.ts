@@ -126,29 +126,59 @@ async function refreshSearch(tx: Tx, def: ObjectDef, fields: FieldDef[], row: Ro
   return { ...row, search_text: text };
 }
 
+type Actor = { source: ActorSource; userId: string | null; name: string | null };
+type WriteScope = { agencyId: string; clientId: string };
+
+/** Inserts an already validated record. Shared by the API (a signed-in actor) and public booking (no user). */
+export async function insertRecordTx(tx: Tx, scope: WriteScope, object: string, fields: FieldDef[], values: Map<string, unknown>, actor: Actor) {
+  const def = objectDef(object);
+  const { cells, patch } = plan(fields, values);
+  await emailConflict(tx, scope.clientId, def.table, primaryEmail(values));
+  const all: Cell[] = [
+    ["agency_id", sql`${scope.agencyId}`], ["client_id", sql`${scope.clientId}`],
+    ["created_by_source", sql`${actor.source}`], ["created_by_user_id", sql`${actor.userId}`], ["created_by_name", sql`${actor.name}`],
+    ["data", json(patch)], ...cells,
+  ];
+  let row: Row;
+  try {
+    const r = await tx.execute(sql`insert into ${ident(def.table)} (${sql.join(all.map(([c]) => ident(c)), sql`, `)}) values (${sql.join(all.map(([, v]) => v), sql`, `)}) returning *`);
+    row = r.rows[0] as Row;
+  } catch (e) {
+    if (isUniqueViolation(e)) throw new DomainError("conflict", "A contact with this email already exists.");
+    throw e;
+  }
+  checkIdentified(row, fields, def);
+  return toRecord(await refreshSearch(tx, def, fields, row), fields);
+}
+
+/** Applies already validated values to an existing record. */
+export async function patchRecordTx(tx: Tx, scope: WriteScope, object: string, fields: FieldDef[], id: string, values: Map<string, unknown>) {
+  const def = objectDef(object);
+  const { cells, patch, remove } = plan(fields, values);
+  if (values.has("emails")) await emailConflict(tx, scope.clientId, def.table, primaryEmail(values), id);
+  const sets: SQL[] = [
+    sql`updated_at = now()`,
+    ...cells.map(([c, v]) => sql`${ident(c)} = ${v}`),
+    ...(Object.keys(patch).length || remove.length ? [sql`data = (data - ${textArray(remove)}) || ${json(patch)}`] : []),
+  ];
+  let row: Row;
+  try {
+    const r = await tx.execute(sql`update ${ident(def.table)} set ${sql.join(sets, sql`, `)} where client_id = ${scope.clientId} and id = ${id} returning *`);
+    row = r.rows[0] as Row;
+  } catch (e) {
+    if (isUniqueViolation(e)) throw new DomainError("conflict", "A contact with this email already exists.");
+    throw e;
+  }
+  checkIdentified(row, fields, def);
+  return toRecord(await refreshSearch(tx, def, fields, row), fields);
+}
+
 export function createRecord(db: Db, scope: CrmScope, object: string, body: Record<string, unknown>, opts: { source?: ActorSource; mode?: Mode } = {}) {
   const def = objectDef(object);
   return scoped(db, scope, "write", async (tx) => {
     const fields = await loadFields(tx, scope.clientId, def);
     const values = validateInput(fields, body.fields, opts.mode ?? "staff", true);
-    const { cells, patch } = plan(fields, values);
-    await emailConflict(tx, scope.clientId, def.table, primaryEmail(values));
-    const actor = await actorOf(tx, scope.userId, opts.source ?? "staff");
-    const all: Cell[] = [
-      ["agency_id", sql`${scope.agencyId}`], ["client_id", sql`${scope.clientId}`],
-      ["created_by_source", sql`${actor.source}`], ["created_by_user_id", sql`${actor.userId}`], ["created_by_name", sql`${actor.name}`],
-      ["data", json(patch)], ...cells,
-    ];
-    let row: Row;
-    try {
-      const r = await tx.execute(sql`insert into ${ident(def.table)} (${sql.join(all.map(([c]) => ident(c)), sql`, `)}) values (${sql.join(all.map(([, v]) => v), sql`, `)}) returning *`);
-      row = r.rows[0] as Row;
-    } catch (e) {
-      if (isUniqueViolation(e)) throw new DomainError("conflict", "A contact with this email already exists.");
-      throw e;
-    }
-    checkIdentified(row, fields, def);
-    return toRecord(await refreshSearch(tx, def, fields, row), fields);
+    return insertRecordTx(tx, scope, object, fields, values, await actorOf(tx, scope.userId, opts.source ?? "staff"));
   });
 }
 
@@ -158,23 +188,7 @@ export function updateRecord(db: Db, scope: CrmScope, object: string, id: string
     await fetchRow(tx, def, scope.clientId, id);
     const fields = await loadFields(tx, scope.clientId, def);
     const values = validateInput(fields, body.fields, opts.mode ?? "staff", false);
-    const { cells, patch, remove } = plan(fields, values);
-    if (values.has("emails")) await emailConflict(tx, scope.clientId, def.table, primaryEmail(values), id);
-    const sets: SQL[] = [
-      sql`updated_at = now()`,
-      ...cells.map(([c, v]) => sql`${ident(c)} = ${v}`),
-      ...(Object.keys(patch).length || remove.length ? [sql`data = (data - ${textArray(remove)}) || ${json(patch)}`] : []),
-    ];
-    let row: Row;
-    try {
-      const r = await tx.execute(sql`update ${ident(def.table)} set ${sql.join(sets, sql`, `)} where client_id = ${scope.clientId} and id = ${id} returning *`);
-      row = r.rows[0] as Row;
-    } catch (e) {
-      if (isUniqueViolation(e)) throw new DomainError("conflict", "A contact with this email already exists.");
-      throw e;
-    }
-    checkIdentified(row, fields, def);
-    return toRecord(await refreshSearch(tx, def, fields, row), fields);
+    return patchRecordTx(tx, scope, object, fields, id, values);
   });
 }
 

@@ -1,6 +1,8 @@
 import { and, asc, eq } from "drizzle-orm";
+import { slugify } from "@ownlevel/tenancy";
 import { agencies, clients, withTenant, type Db } from "../../db/index.js";
 import { DomainError } from "../../errors.js";
+import { RESERVED } from "../calendars/calendars.js";
 import { assertClient, requireRole } from "../identity/team.js";
 
 type Scope = { userId: string; agencyId: string };
@@ -57,10 +59,15 @@ export async function createClient(db: Db, ctx: Scope, input: Record<string, unk
   return withTenant(db, ctx, async (tx) => {
     await requireRole(tx, ctx.userId, ctx.agencyId, MANAGERS);
     // Omitted timezone/currency fall back to the agency's.
-    const [agency] = await tx.select({ timezone: agencies.timezone, currency: agencies.currency }).from(agencies).where(eq(agencies.id, ctx.agencyId));
+    const [agency] = await tx.select({ timezone: agencies.timezone, currency: agencies.currency, country: agencies.country }).from(agencies).where(eq(agencies.id, ctx.agencyId));
+    // The booking page address is suggested from the name; the client can change it later.
+    const base = slugify(name).replace(/-+$/, "").slice(0, 50);
+    let slug = RESERVED.has(base) || base.length < 3 ? "client" : base;
+    const root = slug;
+    for (let n = 2; (await tx.select({ id: clients.id }).from(clients).where(and(eq(clients.agencyId, ctx.agencyId), eq(clients.slug, slug)))).length; n++) slug = `${root}-${n}`;
     const [row] = await tx
       .insert(clients)
-      .values({ agencyId: ctx.agencyId, name, timezone: timezone ?? agency!.timezone, currency: currency ?? agency!.currency })
+      .values({ agencyId: ctx.agencyId, name, slug, country: agency!.country, timezone: timezone ?? agency!.timezone, currency: currency ?? agency!.currency })
       .returning(columns);
     return row!;
   });

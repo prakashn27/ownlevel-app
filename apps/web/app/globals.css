@@ -73,3 +73,6 @@ body.theme-ownlevel {
   a:hover { text-decoration: underline; }
   body.theme-ownlevel a { color: #0f5132; }
 }
+
+/* Embedded booking page (?embed=1): no agency header. */
+body[data-embed] > header { display: none; }

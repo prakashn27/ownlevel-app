@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { slugify, subdomainHost, validateSlug, type HostConfig } from "@ownlevel/tenancy";
 import { agencies, agencyDomains, memberships, roles, withTenant, type Db } from "../../db/index.js";
 import { DomainError } from "../../errors.js";
+import { isCountry } from "../crm/phone.js";
 
 export type CreateAgencyInput = {
   /** From the authenticated session, never from the request body. */
@@ -11,6 +12,8 @@ export type CreateAgencyInput = {
   slug?: string;
   timezone?: string;
   currency?: string;
+  /** Default country for phone numbers typed without a country code (ISO 3166-1 alpha-2). */
+  country?: string;
 };
 
 export async function createAgency(db: Db, input: CreateAgencyInput, hostCfg: Pick<HostConfig, "rootDomain">) {
@@ -22,6 +25,9 @@ export async function createAgency(db: Db, input: CreateAgencyInput, hostCfg: Pi
   const currency = (input.currency ?? "USD").toUpperCase();
   if (!/^[A-Z]{3}$/.test(currency)) throw new DomainError("invalid_input", "Invalid currency code.");
 
+  const country = (input.country ?? "US").toUpperCase();
+  if (!isCountry(country)) throw new DomainError("invalid_input", "Country must be a 2-letter country code like US.");
+
   const hostname = subdomainHost(slug, hostCfg);
   // The new agency's id is the tenant context, so every insert passes its own RLS check.
   const agencyId = randomUUID();
@@ -29,7 +35,7 @@ export async function createAgency(db: Db, input: CreateAgencyInput, hostCfg: Pi
     return await withTenant(db, { agencyId, userId: input.userId }, async (tx) => {
       const [agency] = await tx
         .insert(agencies)
-        .values({ id: agencyId, name, slug, timezone: input.timezone ?? "UTC", currency })
+        .values({ id: agencyId, name, slug, timezone: input.timezone ?? "UTC", currency, country })
         .returning();
       await tx.insert(agencyDomains).values({
         agencyId,

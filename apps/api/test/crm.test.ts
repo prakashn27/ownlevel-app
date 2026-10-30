@@ -260,7 +260,7 @@ describe("typed values", () => {
       [{ budget: { amount_micros: 1.5 } }, /whole number/],
       [{ emails: { primary_email: "nope" } }, /valid email/],
       [{ emails: { additional_emails: ["a@b.co"] } }, /primary_email/],
-      [{ phones: { primary_phone_number: "4155550123" } }, /country code/],
+      [{ phones: { primary_phone_number: "123" } }, /possible phone number/],
       [{ linkedin: { primary_link_url: "javascript:alert(1)" } }, /http/],
       [{ [plan]: "opt_nope" }, /options/],
       [{ reference: "x".repeat(11) }, /at most 10/],

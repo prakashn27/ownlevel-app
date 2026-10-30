@@ -5,12 +5,16 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
+import { CountrySelect } from "@/components/ui/country-select";
 import { AuthCard } from "../../components/auth-card";
 import { authClient } from "../../lib/auth-client";
 import { onHost } from "../../lib/api";
 
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+
+/** The region of the browser's language (en-GB → GB); the owner can change it. */
+const guessCountry = () => (typeof navigator !== "undefined" ? navigator.language.split("-")[1]?.toUpperCase() : undefined) ?? "US";
 
 const ROOT = process.env.NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN ?? "localhost";
 
@@ -53,7 +57,7 @@ export default function Onboarding() {
     const res = await fetch("/api/agencies", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, slug, timezone: f.get("timezone"), currency: f.get("currency") }),
+      body: JSON.stringify({ name, slug, timezone: f.get("timezone"), currency: f.get("currency"), country: f.get("country") }),
     });
     setPending(false);
     const body = await res.json();
@@ -102,6 +106,7 @@ export default function Onboarding() {
         </div>
         <Input name="timezone" defaultValue={tz} placeholder={t("timezone")} required />
         <Input name="currency" defaultValue="USD" placeholder={t("currency")} maxLength={3} required />
+        <label className="flex flex-col gap-1.5 text-sm">{t("country")}<CountrySelect name="country" defaultValue={guessCountry()} required /></label>
         {error && <Alert variant="destructive">{error}</Alert>}
         <Button disabled={pending || available === false}>{t("create")}</Button>
       </form>

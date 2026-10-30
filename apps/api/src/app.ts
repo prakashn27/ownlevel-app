@@ -3,6 +3,30 @@ import { cors } from "hono/cors";
 import {
   DomainError,
   acceptInvitation,
+  addHost,
+  bookPublic,
+  cancelManagedBooking,
+  getBookingSettings,
+  getManagedBooking,
+  getPublicCalendar,
+  getPublicSlots,
+  updateBookingSettings,
+  archiveCalendar,
+  clearOverride,
+  createAppointment,
+  createCalendar,
+  getAppointment,
+  getCalendar,
+  getSlots,
+  listAppointments,
+  listContactAppointments,
+  listCalendars,
+  listEligibleHosts,
+  removeHost,
+  setOverride,
+  updateAppointment,
+  updateAttendee,
+  updateCalendar,
   createAgency,
   createClient,
   createField,
@@ -95,7 +119,7 @@ app.post("/api/oauth/select-agency", async (c) => {
 app.onError((err, c) => {
   if (err instanceof DomainError) {
     const status =
-      err.code === "slug_taken" || err.code === "conflict" ? 409 : err.code === "not_found" ? 404 : err.code === "forbidden" ? 403 : err.code === "unauthorized" ? 401 : 400;
+      err.code === "slug_taken" || err.code === "conflict" ? 409 : err.code === "rate_limited" ? 429 : err.code === "not_found" ? 404 : err.code === "forbidden" ? 403 : err.code === "unauthorized" ? 401 : 400;
     return c.json({ error: err.code, message: err.message, ...err.details }, status);
   }
   console.error(err);
@@ -146,6 +170,7 @@ app.post("/api/agencies", async (c) => {
       slug: typeof body.slug === "string" ? body.slug : undefined,
       timezone: typeof body.timezone === "string" ? body.timezone : undefined,
       currency: typeof body.currency === "string" ? body.currency : undefined,
+      country: typeof body.country === "string" ? body.country : undefined,
     },
     hostConfig,
   );
@@ -285,6 +310,8 @@ app.get("/api/clients/:clientId/crm/:object", async (c) => {
 
 app.post("/api/clients/:clientId/crm/:object", async (c) => c.json(await createRecord(db, await crmScope(c), c.req.param("object"), await jsonBody(c)), 201));
 
+app.get("/api/clients/:clientId/crm/contacts/:contactId/appointments", async (c) => c.json(await listContactAppointments(db, await crmScope(c), c.req.param("contactId"))));
+
 app.get("/api/clients/:clientId/crm/:object/:id", async (c) => c.json(await getRecord(db, await crmScope(c), c.req.param("object"), c.req.param("id"))));
 
 app.patch("/api/clients/:clientId/crm/:object/:id", async (c) =>
@@ -292,3 +319,101 @@ app.patch("/api/clients/:clientId/crm/:object/:id", async (c) =>
 
 /** Permanent: erases the record and everything about it. */
 app.delete("/api/clients/:clientId/crm/:object/:id", async (c) => c.json(await deleteRecord(db, await crmScope(c), c.req.param("object"), c.req.param("id"))));
+
+// ── Calendars: client-scoped. Appointments hold attendee details, so there is no agency-wide route. ──
+app.get("/api/clients/:clientId/calendars", async (c) => c.json(await listCalendars(db, await crmScope(c), { status: c.req.query("status") })));
+app.post("/api/clients/:clientId/calendars", async (c) => c.json(await createCalendar(db, await crmScope(c), await jsonBody(c)), 201));
+app.get("/api/clients/:clientId/calendars/eligible-hosts", async (c) => c.json(await listEligibleHosts(db, await crmScope(c))));
+app.get("/api/clients/:clientId/calendars/:id", async (c) => c.json(await getCalendar(db, await crmScope(c), c.req.param("id"))));
+app.patch("/api/clients/:clientId/calendars/:id", async (c) => c.json(await updateCalendar(db, await crmScope(c), c.req.param("id"), await jsonBody(c))));
+/** Archives; appointments are kept. */
+app.delete("/api/clients/:clientId/calendars/:id", async (c) => c.json(await archiveCalendar(db, await crmScope(c), c.req.param("id"))));
+app.get("/api/clients/:clientId/calendars/:id/slots", async (c) => c.json(await getSlots(db, await crmScope(c), c.req.param("id"), { from: c.req.query("from"), to: c.req.query("to") })));
+app.put("/api/clients/:clientId/calendars/:id/hosts/:userId", async (c) => c.json(await addHost(db, await crmScope(c), c.req.param("id"), c.req.param("userId"), await c.req.json().catch(() => ({})))));
+app.delete("/api/clients/:clientId/calendars/:id/hosts/:userId", async (c) => c.json(await removeHost(db, await crmScope(c), c.req.param("id"), c.req.param("userId"))));
+app.put("/api/clients/:clientId/calendars/:id/overrides/:date", async (c) => c.json(await setOverride(db, await crmScope(c), c.req.param("id"), c.req.param("date"), await jsonBody(c))));
+app.delete("/api/clients/:clientId/calendars/:id/overrides/:date", async (c) => c.json(await clearOverride(db, await crmScope(c), c.req.param("id"), c.req.param("date"))));
+
+app.get("/api/clients/:clientId/appointments", async (c) => {
+  const limit = c.req.query("limit");
+  return c.json(
+    await listAppointments(db, await crmScope(c), {
+      from: c.req.query("from"),
+      to: c.req.query("to"),
+      calendarId: c.req.query("calendarId"),
+      hostId: c.req.query("hostId"),
+      status: c.req.query("status"),
+      cursor: c.req.query("cursor"),
+      limit: limit ? Number(limit) : undefined,
+    }),
+  );
+});
+app.post("/api/clients/:clientId/appointments", async (c) => c.json(await createAppointment(db, await crmScope(c), await jsonBody(c)), 201));
+app.get("/api/clients/:clientId/appointments/:id", async (c) => c.json(await getAppointment(db, await crmScope(c), c.req.param("id"))));
+app.patch("/api/clients/:clientId/appointments/:id", async (c) => c.json(await updateAppointment(db, await crmScope(c), c.req.param("id"), await jsonBody(c))));
+app.patch("/api/clients/:clientId/appointments/:id/attendees/:attendeeId", async (c) =>
+  c.json(await updateAttendee(db, await crmScope(c), c.req.param("id"), c.req.param("attendeeId"), await jsonBody(c))));
+
+// Booking address and phone default country of a client.
+app.get("/api/clients/:clientId/booking-settings", async (c) => c.json(await getBookingSettings(db, await crmScope(c))));
+app.patch("/api/clients/:clientId/booking-settings", async (c) => c.json(await updateBookingSettings(db, await crmScope(c), await jsonBody(c))));
+
+// ── Public booking: no session. The agency comes from the host; the page from the URL. ──
+type Limiter = { limit(o: { key: string }): Promise<{ success: boolean }> };
+type PublicEnv = { PUBLIC_IP_LIMITER?: Limiter; PUBLIC_CALENDAR_LIMITER?: Limiter; BOOK_IP_LIMITER?: Limiter };
+
+const clientIp = (c: Ctx) => c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+
+/** Workers rate-limit bindings (see wrangler.jsonc). Not available on Node, where nothing is limited. */
+async function throttle(c: Ctx, ...checks: [keyof PublicEnv, string][]) {
+  const bindings = c.env as PublicEnv | undefined;
+  for (const [name, key] of checks) {
+    const limiter = bindings?.[name];
+    if (limiter && !(await limiter.limit({ key })).success) throw new DomainError("rate_limited", "Too many requests. Please wait a moment and try again.");
+  }
+}
+
+let warnedTurnstile = false;
+async function verifyTurnstile(token: unknown, ip: string) {
+  if (!env.turnstileSecret) {
+    if (!warnedTurnstile) { warnedTurnstile = true; console.warn("TURNSTILE_SECRET is not set: public bookings are not bot-checked."); }
+    return;
+  }
+  const body = new URLSearchParams({ secret: env.turnstileSecret, response: typeof token === "string" ? token : "", remoteip: ip });
+  const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body }).catch(() => null);
+  const ok = res?.ok && ((await res.json().catch(() => null)) as { success?: boolean } | null)?.success === true;
+  if (!ok) throw new DomainError("invalid_input", "We couldn't verify you're human. Please try again.");
+}
+
+// The attendee's own booking, through the link they were given. Registered first: "manage" is a reserved client slug.
+app.get("/api/public/booking/manage/:token", async (c) => {
+  await throttle(c, ["PUBLIC_IP_LIMITER", `manage:${clientIp(c)}`]);
+  return c.json(await getManagedBooking(db, (await agencyHost(c)).agencyId, c.req.param("token")));
+});
+app.post("/api/public/booking/manage/:token/cancel", async (c) => {
+  await throttle(c, ["BOOK_IP_LIMITER", `cancel:${clientIp(c)}`]);
+  return c.json(await cancelManagedBooking(db, (await agencyHost(c)).agencyId, c.req.param("token")));
+});
+
+const pageKey = (c: Ctx) => `${c.req.param("clientSlug")}/${c.req.param("calendarSlug")}`;
+
+app.get("/api/public/booking/:clientSlug/:calendarSlug", async (c) => {
+  const { agencyId, branding, name } = await agencyHost(c);
+  await throttle(c, ["PUBLIC_IP_LIMITER", `page:${clientIp(c)}`], ["PUBLIC_CALENDAR_LIMITER", `${agencyId}:${pageKey(c)}`]);
+  return c.json({ ...(await getPublicCalendar(db, agencyId, c.req.param("clientSlug"), c.req.param("calendarSlug"))), agency: { name, branding } });
+});
+
+app.get("/api/public/booking/:clientSlug/:calendarSlug/slots", async (c) => {
+  const { agencyId } = await agencyHost(c);
+  await throttle(c, ["PUBLIC_IP_LIMITER", `slots:${clientIp(c)}`], ["PUBLIC_CALENDAR_LIMITER", `${agencyId}:${pageKey(c)}`]);
+  return c.json(await getPublicSlots(db, agencyId, c.req.param("clientSlug"), c.req.param("calendarSlug"), { from: c.req.query("from"), to: c.req.query("to") }));
+});
+
+app.post("/api/public/booking/:clientSlug/:calendarSlug/book", async (c) => {
+  const { agencyId } = await agencyHost(c);
+  const ip = clientIp(c);
+  await throttle(c, ["BOOK_IP_LIMITER", `book:${ip}`], ["PUBLIC_CALENDAR_LIMITER", `${agencyId}:${pageKey(c)}`]);
+  const body = await jsonBody(c);
+  await verifyTurnstile(body.turnstile_token, ip);
+  return c.json(await bookPublic(db, agencyId, c.req.param("clientSlug"), c.req.param("calendarSlug"), body, c.req.header("idempotency-key")), 201);
+});

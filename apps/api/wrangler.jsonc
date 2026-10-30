@@ -11,7 +11,7 @@
   // Then paste the returned id below. The role must NOT be superuser/BYPASSRLS.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "3f07738b696246ad83692a07daa88f14", "localConnectionString": "postgres://ownlevel:ownlevel@localhost:5432/ownlevel" }],
 
-  // Secrets (wrangler secret put): BETTER_AUTH_SECRET, PROXY_SHARED_SECRET, RESEND_API_KEY
+  // Secrets (wrangler secret put): BETTER_AUTH_SECRET, PROXY_SHARED_SECRET, RESEND_API_KEY, TURNSTILE_SECRET
   "vars": {
     // The platform origin, not api.*: the OAuth authorization server for MCP must share the browser's session
     // cookie, which only exists on hosts served by the web Worker (it proxies /api/* and /.well-known/*).
@@ -21,6 +21,15 @@
     "PLATFORM_HOSTS": "app.ownlevel.app",
     "WEB_ORIGINS": "",
     "EMAIL_FROM": "noreply@ownlevel.app"
+  },
+
+  // Public booking limits (per 60 seconds). Counted per Cloudflare location; they slow abuse, they are not exact.
+  "unsafe": {
+    "bindings": [
+      { "name": "PUBLIC_IP_LIMITER", "type": "ratelimit", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
+      { "name": "PUBLIC_CALENDAR_LIMITER", "type": "ratelimit", "namespace_id": "1002", "simple": { "limit": 600, "period": 60 } },
+      { "name": "BOOK_IP_LIMITER", "type": "ratelimit", "namespace_id": "1003", "simple": { "limit": 5, "period": 60 } }
+    ]
   },
 
   // A route, not a custom domain: the web Worker's `*.ownlevel.app/*` route also matches this host and

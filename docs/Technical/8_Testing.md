@@ -9,6 +9,7 @@ Tenant isolation is the property we can least afford to get wrong, so the tests 
 | Layer | What it proves | Where | Needs |
 | --- | --- | --- | --- |
 | RLS tests | Postgres itself refuses cross-tenant reads and writes | `apps/api/test/rls.test.ts` | Postgres |
+| Calendar tests | Slot engine (`calendar-slots.test.ts`, no database); isolation, permissions, double booking, public booking and contact linking (`calendars.test.ts`, `booking.test.ts`) | `apps/api/test/calendar*.test.ts`, `booking.test.ts` | Postgres |
 | API smoke script | Signup, host resolution, branding, handoff, invitations, password reset, and the proxy-trust rules work end to end | `apps/api/test/smoke.sh` | Postgres, running API |
 | Manual and runtime checks | The web app, the Cloudflare Workers runtime, and the browser flows | This document | API, web or Workers preview |
 

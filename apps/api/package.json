@@ -9,6 +9,7 @@
     "start": "tsx --env-file-if-exists=.env src/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/migrate.ts",
+    "db:backfill-calendar-contacts": "tsx --env-file-if-exists=.env src/backfill-calendar-contacts.ts",
     "cf:deploy": "wrangler deploy",
     "cf:dev": "wrangler dev --port 4000",
     "cf:dry": "wrangler deploy --dry-run --outdir .wrangler/dry",

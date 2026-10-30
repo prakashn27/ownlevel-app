@@ -5,7 +5,7 @@ import { API_URL, PROXY_SECRET } from "./server-api";
 // Same-origin proxy: the browser only ever talks to its own host, so cookies stay first-party
 // and host-only, with no CORS. The API learns the real host from X-Forwarded-Host, which it
 // trusts only together with the shared secret.
-const FORWARD = ["cookie", "content-type", "accept", "accept-language", "user-agent", "origin", "authorization"];
+const FORWARD = ["cookie", "content-type", "accept", "accept-language", "user-agent", "origin", "authorization", "idempotency-key"];
 
 export async function proxyToApi(req: NextRequest) {
   const url = new URL(req.url);

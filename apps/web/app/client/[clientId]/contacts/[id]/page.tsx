@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "../../../../../lib/api";
 import { useClient } from "../../client-workspace";
 import { base, type CrmRecord, type Metadata } from "../crm";
+import type { Appointment } from "../../calendars/cal";
 import { FieldInput, FieldRow } from "../field-input";
 
 export default function ContactPage() {
@@ -23,6 +24,7 @@ export default function ContactPage() {
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [appointments, setAppointments] = useState<Appointment[] | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -32,6 +34,10 @@ export default function ContactPage() {
       setMeta(m.data); setRecord(r.data); setValues(r.data.fields);
     })();
   }, [client.id, id, t]);
+
+  useEffect(() => {
+    void api<{ items: Appointment[] }>(`${base(client.id)}/contacts/${id}/appointments`).then((r) => r.ok && setAppointments(r.data.items));
+  }, [client.id, id]);
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -73,6 +79,21 @@ export default function ContactPage() {
         {saved && <Alert variant="success">{t("saved")}</Alert>}
         <div><Button disabled={pending}>{t("save")}</Button></div>
       </form>
+
+      <h2 className="mt-10">{t("appointments")}</h2>
+      {appointments && appointments.length === 0 && <p className="text-sm text-muted-foreground">{t("noAppointments")}</p>}
+      {appointments && appointments.length > 0 && (
+        <ul className="m-0 flex max-w-2xl flex-col divide-y rounded-lg border p-0">
+          {appointments.map((a) => (
+            <li key={a.id} className="flex list-none flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-sm">
+              <span className="font-medium">{format.dateTime(new Date(a.starts_at), { dateStyle: "medium", timeStyle: "short", timeZone: client.timezone })}</span>
+              <span className="text-muted-foreground">{a.calendar_name}</span>
+              <span className="text-muted-foreground">{a.hosts.map((h) => h.name).join(", ")}</span>
+              <span className="ml-auto">{a.attendees[0]?.status ?? a.status}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <h2 className="mt-10">{t("deleteTitle")}</h2>
       <p className="mb-3 text-sm text-muted-foreground">{t("deleteHelp", { labelLower: label.toLowerCase() })}</p>

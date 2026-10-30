@@ -16,6 +16,8 @@ export const agencies = pgTable("agencies", {
   slug: text("slug").notNull().unique(),
   timezone: text("timezone").notNull().default("UTC"),
   currency: text("currency").notNull().default("USD"),
+  /** Default country (ISO 3166-1 alpha-2) for phone numbers typed without a country code. */
+  country: text("country").notNull().default("US"),
   branding: jsonb("branding").$type<Branding>().notNull().default({}),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -55,11 +57,15 @@ export const clients = pgTable(
     name: text("name").notNull(),
     timezone: text("timezone").notNull().default("UTC"),
     currency: text("currency").notNull().default("USD"),
+    /** Phone default country; null = the agency's. */
+    country: text("country"),
+    /** Booking page address: /book/{slug}/{calendar slug}. Unique per agency. */
+    slug: text("slug"),
     settings: jsonb("settings").notNull().default({}),
     status: text("status").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("clients_agency_idx").on(t.agencyId)],
+  (t) => [index("clients_agency_idx").on(t.agencyId), uniqueIndex("clients_agency_slug").on(t.agencyId, t.slug).where(sql`${t.slug} is not null`)],
 );
 
 export const roles = pgTable(

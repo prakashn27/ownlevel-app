@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { crmFields, type Db, type Tx, withTenant } from "../../db/index.js";
+import { agencies, clients, crmFields, type Db, type Tx, withTenant } from "../../db/index.js";
 import { DomainError } from "../../errors.js";
 import { type CrmScope, requireCrm } from "./access.js";
 import { isCustomType } from "./field-types.js";
@@ -55,6 +55,12 @@ export async function loadFields(tx: Tx, clientId: string, def: ObjectDef): Prom
       options: r.options,
       defaultValue: r.defaultValue ?? null,
     });
+  }
+  // Phone numbers without a country code are read in the default country: the field's setting, else the client's, else the agency's.
+  if (out.some((f) => f.type === "phones" && f.settings.defaultCountry === undefined)) {
+    const [c] = await tx.select({ client: clients.country, agency: agencies.country }).from(clients).innerJoin(agencies, eq(agencies.id, clients.agencyId)).where(eq(clients.id, clientId));
+    const country = c?.client ?? c?.agency;
+    if (country) for (const f of out) if (f.type === "phones" && f.settings.defaultCountry === undefined) f.settings = { ...f.settings, defaultCountry: country };
   }
   return out.sort((a, b) => a.position - b.position || a.key.localeCompare(b.key));
 }

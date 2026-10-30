@@ -1,4 +1,5 @@
 import { DomainError } from "../../errors.js";
+import { parsePhone, type ParsedPhone } from "./phone.js";
 import { CUSTOM_TYPES, type CustomFieldType, type FieldDef, type FieldType } from "./types.js";
 
 /** Composite types are stored as several columns named {field}_{sub} (or as one JSON object for custom fields). */
@@ -50,12 +51,12 @@ function email(v: unknown, what: string): string | null {
   return s;
 }
 
-function phone(v: unknown, what: string): string | null {
+function phone(v: unknown, what: string, defaultCountry?: unknown): ParsedPhone | null {
   const s = str(v, 32, what);
   if (!s) return null;
-  const n = s.replace(/[\s\-().]/g, "");
-  if (!/^\+[1-9]\d{6,14}$/.test(n)) bad(`${what} must include the country code, like +14155550123.`);
-  return n;
+  const p = parsePhone(s, typeof defaultCountry === "string" ? defaultCountry : null);
+  if ("error" in p) return bad(`${what} ${p.error}`);
+  return p;
 }
 
 function url(v: unknown, what: string): string | null {
@@ -140,21 +141,22 @@ const PARSERS: Record<FieldType, Parser> = {
     if (!primary && out.additional_emails.length) bad("additional_emails needs a primary_email.");
     return isEmpty(out) ? null : out;
   },
-  phones: (v) => {
+  phones: (v, f) => {
     const o = obj(v, "Value");
-    const primary = phone(o.primary_phone_number, "primary_phone_number");
-    const country = str(o.primary_phone_country_code, 2, "primary_phone_country_code")?.toUpperCase() ?? null;
+    // Numbers typed without a country code are read in the default country: field setting, else client, else agency.
+    const primary = phone(o.primary_phone_number, "primary_phone_number", f.settings.defaultCountry);
+    const country = str(o.primary_phone_country_code, 2, "primary_phone_country_code")?.toUpperCase() ?? primary?.country ?? null;
     if (country && !/^[A-Z]{2}$/.test(country)) bad("primary_phone_country_code must be a 2-letter country code.");
-    const calling = str(o.primary_phone_calling_code, 5, "primary_phone_calling_code");
+    const calling = str(o.primary_phone_calling_code, 5, "primary_phone_calling_code") ?? primary?.calling ?? null;
     if (calling && !/^\+\d{1,4}$/.test(calling)) bad("primary_phone_calling_code must look like +1.");
-    const extra = list(o.additional_phones, 10, "additional_phones", (x) => phone(x, "additional_phones"));
+    const extra = list(o.additional_phones, 10, "additional_phones", (x) => phone(x, "additional_phones", f.settings.defaultCountry)?.e164 ?? null);
     const out = {
-      primary_phone_number: primary,
+      primary_phone_number: primary?.e164 ?? null,
       primary_phone_country_code: country,
       primary_phone_calling_code: calling,
-      additional_phones: [...new Set(extra)].filter((p) => p !== primary),
+      additional_phones: [...new Set(extra)].filter((p) => p !== primary?.e164),
     };
-    if (!primary && out.additional_phones.length) bad("additional_phones needs a primary_phone_number.");
+    if (!out.primary_phone_number && out.additional_phones.length) bad("additional_phones needs a primary_phone_number.");
     return isEmpty(out) ? null : out;
   },
   links: (v) => {

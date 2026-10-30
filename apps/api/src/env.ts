@@ -16,6 +16,8 @@ export const env = {
   /** Sender address; the display name is the agency's app name. */
   emailFrom: process.env.EMAIL_FROM ?? "noreply@ownlevel.app",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
+  /** Cloudflare Turnstile secret for public booking. Unset in dev: the check is skipped (and logged once). */
+  turnstileSecret: process.env.TURNSTILE_SECRET ?? "",
   /** Canonical MCP resource URL; access tokens are audience-bound to it. */
   mcpUrl: process.env.MCP_PUBLIC_URL ?? "http://localhost:4100/mcp",
   /**
