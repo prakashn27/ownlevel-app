@@ -71,7 +71,9 @@ export default function Calendars() {
     </button>
   );
 
-  if (cals && cals.length === 0)
+  if (!cals) return error ? <Alert variant="destructive">{error}</Alert> : <p className="text-muted-foreground">{t("loading")}</p>;
+
+  if (cals.length === 0)
     return (
       <div className="flex flex-col items-start gap-3">
         <p className="text-muted-foreground">{t("noCalendars")} {t("createFirst")}</p>
