@@ -496,9 +496,56 @@ The public page uses Cloudflare Turnstile, which an assistant cannot solve, so t
 
 **TODO, email confirmation.** Add an optional step where a booking stays "pending" until the visitor opens a link emailed to them. This stops fake or someone else's email and impersonation, at the price of an extra step and the notifications work in [5_1_Calendar.md](./5_1_Calendar.md). Not built: it is only worth it if abuse shows up. A confirmation email with the manage link after booking is part of the same notifications TODO.
 
+### Adding it to Claude and ChatGPT
+
+Both apps call the link from their own servers, so it must be public https (not `localhost`). The link needs no sign-in: choose "no authentication" wherever the app asks. The menu names below are how these apps looked when this was written; they change often, so treat them as a guide, and see "Not verified" for which plans allow custom connectors.
+
+**What the client shares with customers** (copy from client settings > Booking page > "Link for AI assistants"):
+
+> Book with your AI assistant: add this link as a connector, then ask "Book a haircut tomorrow at 10". `https://mcp.ownlevel.app/book/{agency}/{client}/mcp`
+
+**Claude** (claude.ai or the desktop app)
+
+1. Open Settings > Connectors and choose **Add custom connector**.
+2. Name it (for example the business name) and paste the link. Leave the advanced OAuth fields empty.
+3. Add it. In a chat, open the connectors menu and make sure the connector is switched on for that chat.
+4. Ask: "Book a haircut tomorrow at 10am." Claude lists the services, checks free times, shows the time and details, and asks to confirm before it books.
+5. On Team and Enterprise plans an owner may need to add the connector for the organisation before members can use it.
+6. Claude Code: `claude mcp add --transport http bloom-salon https://mcp.ownlevel.app/book/{agency}/{client}/mcp`
+
+**ChatGPT**
+
+1. Open Settings > Connectors > Advanced and turn on **Developer mode** (custom connectors are only offered on some plans; on Business, Enterprise and Edu a workspace admin may have to allow it).
+2. Back in Connectors, choose **Create**, name it, paste the link as the MCP server URL and set authentication to **No authentication**. Accept the warning that it is a custom connector.
+3. In a new chat, add the connector from the + menu (Developer mode) so it is available in that chat.
+4. Ask: "Book a haircut tomorrow at 10am." ChatGPT asks for approval before running the booking tool; approve it after checking the details.
+
+**What a good run looks like**
+
+| Step | What the assistant does |
+| --- | --- |
+| 1 | `services_list`, then picks the service ("haircut") |
+| 2 | `service_details` to learn whether it needs email, phone or extra answers, and asks the customer for any it does not have |
+| 3 | `slots_find` for the day and offers the free times in the business's local time |
+| 4 | Shows service, time and details, and gets the customer's OK |
+| 5 | `appointment_book`, then tells the customer it is booked and keeps the `manage_token` to cancel later |
+
+**If it does not work**
+
+| Symptom | Likely cause |
+| --- | --- |
+| The app cannot connect or shows no tools | The link is wrong, or the client's master switch is off (the link then returns 404). Open the link's host in a browser: `/healthz` on `mcp.ownlevel.app` should say `ok` |
+| Connected but `services_list` is empty | No calendar is published and switched on under "AI assistants" in its settings |
+| "Not available for booking" for one service | That calendar is a draft, or its own switch is off |
+| It asks you to log in or authorise | The app is treating it as an OAuth server: re-add the connector with authentication set to none |
+| "Too many requests" / "Too many booking attempts" | Per-client rate limit; wait a minute |
+| "already has 3 upcoming bookings" | The per-person cap; cancel one with its `manage_token` or ask the business |
+| The time was not offered | The slot was taken in the meantime; ask for new times |
+| Only some customers' apps can add it | Custom connector availability depends on plan and workspace settings (see below) |
+
 ### Not verified
 
-- Whether ChatGPT and Claude custom connectors accept a server with no authentication on every plan and workspace type. Check before promising it to clients.
+- Whether ChatGPT and Claude custom connectors accept a server with no authentication on every plan and workspace type, and the exact menu names above. Check both apps on a free, a paid and a workspace account before promising it to clients; if a plan does not allow custom connectors, fall back to the client's normal booking page link.
 - Behaviour with a real assistant over public HTTPS. Automated check: `pnpm --filter @ownlevel/mcp-server test:booking` (23 checks: the switches, only chosen calendars offered, free times in local time, booking, retry, taken slot, not-offered time, per-person cap, cancel with the token, another client's token refused).
 
 ## Status and roadmap

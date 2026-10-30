@@ -12,6 +12,7 @@ import { notifyClientsChanged } from "../../../../lib/clients-events";
 import { CountrySelect } from "@/components/ui/country-select";
 import { TimezoneSelect } from "@/components/ui/timezone-select";
 import { useClient } from "../client-workspace";
+import { AiConnectHelp } from "./ai-connect-help";
 
 export default function Settings() {
   const { client, label, reload } = useClient();
@@ -74,7 +75,7 @@ export default function Settings() {
             <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="ai_booking" defaultChecked={booking.ai_booking} className="mt-1" /><span><b>{t("client.settings.aiBooking")}</b><br /><span className="text-muted-foreground">{t("client.settings.aiBookingHelp")}</span></span></label>
             {booking.ai_booking && booking.mcp_url && (
               <div>
-                <Label>{t("client.settings.aiLink")}</Label>
+                <div className="flex items-center gap-1"><Label>{t("client.settings.aiLink")}</Label><AiConnectHelp link={booking.mcp_url} /></div>
                 <div className="flex items-center gap-2">
                   <Input readOnly value={booking.mcp_url} onFocus={(e) => e.target.select()} />
                   <Button type="button" variant="outline" onClick={async () => { await navigator.clipboard.writeText(booking.mcp_url!); setCopied(true); setTimeout(() => setCopied(false), 2000); }}>{copied ? t("client.settings.copied") : t("client.settings.copy")}</Button>

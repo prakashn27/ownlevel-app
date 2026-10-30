@@ -156,6 +156,24 @@
       "aiBookingHelp": "Visitors can add the link below to ChatGPT or Claude to check free times and book, with no sign-in, like your booking page. Nothing is offered until you also switch on each calendar in its settings. Turn this off to stop all of it.",
       "aiLink": "Link for AI assistants",
       "aiLinkHelp": "Share this link. The assistant offers only the calendars you switched on.",
+      "aiHowButton": "How to add this to Claude or ChatGPT",
+      "aiHow": {
+        "title": "Add this to Claude or ChatGPT",
+        "intro": "Customers add the link below as a custom connector. It needs no sign-in: choose \"no authentication\" if asked. Menu names change often, so treat these steps as a guide.",
+        "claudeTitle": "Claude",
+        "claude1": "Open Settings > Connectors and choose Add custom connector.",
+        "claude2": "Name it and paste the link. Leave the advanced fields empty.",
+        "claude3": "Switch the connector on in a chat, then ask: \"Book a haircut tomorrow at 10am.\"",
+        "claude4": "On Team and Enterprise plans an owner may need to add it for the organisation first.",
+        "chatgptTitle": "ChatGPT",
+        "chatgpt1": "Open Settings > Connectors > Advanced and turn on Developer mode. On Business, Enterprise and Edu plans an admin may need to allow it.",
+        "chatgpt2": "Choose Create, name it, paste the link as the MCP server URL and set authentication to No authentication.",
+        "chatgpt3": "Add the connector to a new chat, then ask: \"Book a haircut tomorrow at 10am.\" Approve the booking when ChatGPT asks.",
+        "note": "Custom connectors are not available on every plan. If a customer cannot add it, send them your booking page link instead. The assistant only offers calendars you switched on, and asks the customer to confirm before booking.",
+        "copyMessage": "Copy a message for customers",
+        "message": "Book with your AI assistant: add this link as a connector in Claude or ChatGPT, then ask \"Book a haircut tomorrow at 10\". {link}",
+        "close": "Close"
+      },
       "copy": "Copy link",
       "copied": "Copied"
     }
