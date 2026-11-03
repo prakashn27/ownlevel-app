@@ -1,6 +1,6 @@
 "use client";
 import { useTranslations } from "next-intl";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +36,7 @@ export default function Settings() {
     setBooking(r.data); setBookingSaved(true);
   }
 
+  const logoInput = useRef<HTMLInputElement>(null);
   const [logo, setLogo] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   useEffect(() => { void api<{ url: string | null }>(`/api/clients/${client.id}/logo`).then((r) => r.ok && setLogo(r.data.url)); }, [client.id]);
@@ -86,7 +87,8 @@ export default function Settings() {
       <p className="mb-3 text-sm text-muted-foreground">{t("client.settings.logoHelp")}</p>
       <div className="flex items-center gap-3">
         {logo && <img src={logo} alt="" height={48} className="h-12 w-auto rounded border" />}
-        <Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadLogo(f); e.target.value = ""; }} />
+        <input ref={logoInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadLogo(f); e.target.value = ""; }} />
+        <Button type="button" variant="outline" onClick={() => logoInput.current?.click()}>{logo ? t("client.settings.logoReplace") : t("client.settings.logoUpload")}</Button>
         {logo && <Button type="button" variant="outline" onClick={removeLogo}>{t("client.settings.logoRemove")}</Button>}
       </div>
       {logoError && <Alert variant="destructive" className="mt-3">{logoError}</Alert>}
