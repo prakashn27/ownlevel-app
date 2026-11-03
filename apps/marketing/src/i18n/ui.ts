@@ -21,7 +21,7 @@ export const ui = {
     "pricing.p3.accounts": "Unlimited accounts",
     "nav.signin": "Sign in",
     "nav.cta": "Get started",
-    "hero.title": "Describe it. We build it, host it, and keep it compliant, under your brand.",
+    "hero.title": "The white-label platform for agencies: CRM, automations, and AI agents for every client, under your brand.",
     "hero.sub": "Full white-label from day one. No learning curve. No account bans. No surprise bills.",
     "hero.cta": "Start free",
     "industries.title": "Built for your industry",
@@ -34,6 +34,7 @@ export const ui = {
     "features.3.t": "Automations",
     "features.3.b": "Event-driven workflows for SMS, email and follow-ups.",
     "footer.rights": "All rights reserved.",
+    "footer.privacy": "Privacy Policy",
     "lang.switch": "Français",
   },
   fr: {
@@ -65,6 +66,7 @@ export const ui = {
     "features.3.t": "Automatisations",
     "features.3.b": "Des flux de travail déclenchés par événements : SMS, courriels et relances.",
     "footer.rights": "Tous droits réservés.",
+    "footer.privacy": "Politique de confidentialité",
     "lang.switch": "English",
   },
 } as const;
