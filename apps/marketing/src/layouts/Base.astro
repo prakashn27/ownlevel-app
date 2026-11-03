@@ -1,5 +1,5 @@
 ---
-import { getLocale, useTranslations, brand, appUrl, home, industriesIndex, blogIndex, pricingUrl } from "../i18n/utils";
+import { getLocale, useTranslations, brand, appUrl, home, industriesIndex, blogIndex, pricingUrl, privacyUrl } from "../i18n/utils";
 import { hreflang, type Locale } from "../i18n/ui";
 
 interface Props {
@@ -60,6 +60,7 @@ const jsonLd = { "@context": "https://schema.org", "@type": "Organization", name
       .wrap { max-width:1040px; margin:0 auto; padding:0 1.25rem; }
       header { border-bottom:1px solid var(--line); padding:1rem 0; background:var(--bg); }
       main { flex:1; width:100%; }
+      footer a { color:#d1d5db; }
       footer { background:var(--ink); color:#9ca3af; margin-top:4rem; padding:2rem 0; }
       nav { display:flex; gap:1.25rem; align-items:center; }
       nav a:not(.btn):not(.brand) { color:var(--text); text-decoration:none; }
@@ -93,6 +94,6 @@ const jsonLd = { "@context": "https://schema.org", "@type": "Organization", name
       </nav>
     </header>
     <main class="wrap"><slot /></main>
-    <footer><div class="wrap">© {new Date().getFullYear()} {brand}. {t("footer.rights")}</div></footer>
+    <footer><div class="wrap">© {new Date().getFullYear()} {brand}. {t("footer.rights")} · <a href={privacyUrl(locale)}>{t("footer.privacy")}</a></div></footer>
   </body>
 </html>

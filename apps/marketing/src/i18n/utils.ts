@@ -15,8 +15,8 @@ export function useTranslations(locale: Locale) {
 
 // Localized route segments (translated slugs).
 export const segments = {
-  en: { industries: "industries", blog: "blog", pricing: "pricing" },
-  fr: { industries: "secteurs", blog: "blog", pricing: "tarifs" },
+  en: { industries: "industries", blog: "blog", pricing: "pricing", privacy: "privacy" },
+  fr: { industries: "secteurs", blog: "blog", pricing: "tarifs", privacy: "confidentialite" },
 } as const;
 
 export const home = (l: Locale) => (l === "en" ? "/" : "/fr");
@@ -25,3 +25,4 @@ export const industryUrl = (l: Locale, slug: string) => `${industriesIndex(l)}/$
 // Blog is English-only for now; French pages link to the English blog.
 export const blogIndex = () => "/blog";
 export const pricingUrl = (l: Locale) => `${home(l) === "/" ? "" : home(l)}/${segments[l].pricing}`;
+export const privacyUrl = (l: Locale) => `${home(l) === "/" ? "" : home(l)}/${segments[l].privacy}`;

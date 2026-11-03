@@ -1,0 +1,51 @@
+---
+import Base from "../layouts/Base.astro";
+import { privacyUrl } from "../i18n/utils";
+import { legal } from "../legal";
+import { en } from "../privacy/en";
+import { fr } from "../privacy/fr";
+import type { Locale } from "../i18n/ui";
+
+const { locale } = Astro.props as { locale: Locale };
+const doc = locale === "fr" ? fr : en;
+const date = new Intl.DateTimeFormat(locale === "fr" ? "fr-CA" : "en-CA", { dateStyle: "long", timeZone: "UTC" })
+  .format(new Date(`${legal.effectiveDate}T00:00:00Z`));
+---
+<Base
+  title={doc.title}
+  description={doc.description}
+  alternates={{ en: privacyUrl("en"), fr: privacyUrl("fr") }}
+>
+  <article class="legal">
+    <h1>{doc.title}</h1>
+    <p class="meta">{doc.updated}: <time datetime={legal.effectiveDate}>{date}</time></p>
+    <aside class="card summary">
+      <h2>{doc.summaryTitle}</h2>
+      <ul>{doc.summary.map((s) => <li set:html={s} />)}</ul>
+    </aside>
+    <nav class="toc" aria-label={doc.toc}>
+      <h2>{doc.toc}</h2>
+      <ol>{doc.sections.map((s) => <li><a href={`#${s.id}`}>{s.title.replace(/^\d+\.\s*/, "")}</a></li>)}</ol>
+    </nav>
+    {doc.sections.map((s) => (
+      <section id={s.id}>
+        <h2>{s.title}</h2>
+        <Fragment set:html={s.html} />
+      </section>
+    ))}
+  </article>
+  <style is:global>
+    .legal { max-width:75ch; padding:3rem 0 1rem; }
+    .legal h1 { font-size:2.25rem; color:var(--primary-deep); margin:0 0 .25rem; }
+    .legal .meta { margin:0 0 1.5rem; }
+    .legal h2 { font-size:1.35rem; margin:2.25rem 0 .5rem; scroll-margin-top:1rem; }
+    .legal h3 { font-size:1.05rem; margin:1.25rem 0 .25rem; }
+    .legal .summary h2, .legal .toc h2 { font-size:1.1rem; margin-top:0; }
+    .legal .toc { display:block; margin:1.5rem 0; }
+    .legal .toc ol { columns:2 18rem; padding-left:1.25rem; margin:0; }
+    .legal li { margin:.3rem 0; }
+    .legal table { width:100%; border-collapse:collapse; margin:1rem 0; font-size:.95rem; }
+    .legal th, .legal td { text-align:left; vertical-align:top; padding:.6rem .75rem; border:1px solid var(--line); }
+    .legal th { background:var(--card); color:var(--ink); }
+  </style>
+</Base>
