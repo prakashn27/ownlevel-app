@@ -17,6 +17,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const abs = (p: string) => new URL(p, Astro.site).href;
 const other: Locale = locale === "en" ? "fr" : "en";
 const fullTitle = `${title} | ${brand}`;
+const gaId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID;
 const jsonLd = { "@context": "https://schema.org", "@type": "Organization", name: brand, url: Astro.site?.href, logo: abs("/logo.png") };
 ---
 <!doctype html>
@@ -78,6 +79,13 @@ const jsonLd = { "@context": "https://schema.org", "@type": "Organization", name
       .card h3 { margin-top:0; }
       .prose { max-width:70ch; }
     </style>
+    {gaId && <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}></script>}
+    {gaId && <script is:inline define:vars={{ gaId }}>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag("js", new Date());
+      gtag("config", gaId);
+    </script>}
   </head>
   <body>
     <header>
