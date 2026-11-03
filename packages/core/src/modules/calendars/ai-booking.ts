@@ -26,7 +26,7 @@ export async function resolveAiTarget(db: Db, agencySlug: string, clientSlug: st
   if (!agencyId) throw notFound();
   return withTenant(db, { agencyId }, async (tx) => {
     const [client] = await tx
-      .select({ id: clients.id, name: clients.name, slug: clients.slug })
+      .select({ id: clients.id, name: clients.name, slug: clients.slug, logoKey: clients.logoKey })
       .from(clients)
       .where(and(eq(clients.agencyId, agencyId), eq(clients.slug, clientSlug.toLowerCase()), eq(clients.status, "active"), eq(clients.aiBooking, true)));
     if (!client) throw notFound();
@@ -35,7 +35,7 @@ export async function resolveAiTarget(db: Db, agencySlug: string, clientSlug: st
       .from(calendars)
       .where(and(eq(calendars.clientId, client.id), eq(calendars.status, "published"), eq(calendars.aiBooking, true)))
       .orderBy(asc(calendars.name));
-    return { agencyId, client: { id: client.id, name: client.name, slug: client.slug! }, calendars: offered };
+    return { agencyId, client: { id: client.id, name: client.name, slug: client.slug!, logoKey: client.logoKey }, calendars: offered };
   });
 }
 export type AiTarget = Awaited<ReturnType<typeof resolveAiTarget>>;

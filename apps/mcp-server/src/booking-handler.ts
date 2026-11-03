@@ -4,6 +4,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { z } from "zod";
 import { DomainError, resolveAiTarget, type Db } from "@ownlevel/core";
 import { bookingTools } from "@ownlevel/ai/tools";
+import { serverIcons } from "./logos.js";
 
 /** Rate limits of the public endpoint. Keys are per client, not per IP: assistants share their provider's IPs. */
 export type BookingLimit = (limiter: "client" | "book", key: string) => Promise<boolean>;
@@ -35,7 +36,7 @@ export function createBookingHandler(deps: { db: Db; limit?: BookingLimit }) {
     }
     const ctx = { db: deps.db, target };
 
-    const server = new Server({ name: target.client.name, version: "0.0.0" }, { capabilities: { tools: {} } });
+    const server = new Server({ name: target.client.name, version: "0.0.0", icons: serverIcons(new URL(req.url).origin, { logoKey: target.client.logoKey, logoUrl: null }) }, { capabilities: { tools: {} } });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: bookingTools.map((t) => ({ name: t.name, description: t.description, annotations: t.annotations, inputSchema: z.toJSONSchema(t.input) as { type: "object" } })),
     }));

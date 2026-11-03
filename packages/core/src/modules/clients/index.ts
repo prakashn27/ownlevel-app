@@ -115,3 +115,33 @@ export async function updateClient(db: Db, ctx: Scope, clientId: string, input: 
     return row!;
   });
 }
+
+/** Uploaded logo of a client (object key in the logos bucket, null = none). Same visibility as getClient. */
+export async function getClientLogoKey(db: Db, ctx: Scope, clientId: string) {
+  await getClient(db, ctx, clientId);
+  return withTenant(db, ctx, async (tx) => (await tx.select({ k: clients.logoKey }).from(clients).where(and(eq(clients.id, clientId), eq(clients.agencyId, ctx.agencyId)))).at(0)?.k ?? null);
+}
+
+/** Point the client at a new logo object (or null to remove). Returns the previous key so the caller can delete it. Owners and admins only. */
+export const setClientLogoKey = (db: Db, ctx: Scope, clientId: string, key: string | null) =>
+  withTenant(db, ctx, async (tx) => {
+    await requireRole(tx, ctx.userId, ctx.agencyId, MANAGERS);
+    await assertClient(tx, ctx.agencyId, clientId);
+    const [prev] = await tx.select({ k: clients.logoKey }).from(clients).where(and(eq(clients.id, clientId), eq(clients.agencyId, ctx.agencyId)));
+    await tx.update(clients).set({ logoKey: key }).where(and(eq(clients.id, clientId), eq(clients.agencyId, ctx.agencyId)));
+    return prev?.k ?? null;
+  });
+
+/**
+ * Who an MCP connection presents itself as. A client-level connection shows the client's uploaded logo (a key; the
+ * caller turns it into a public URL), an agency-level one the agency's branding logo URL.
+ */
+export const getMcpIdentity = (db: Db, ctx: { agencyId: string; clientId?: string }) =>
+  withTenant(db, { agencyId: ctx.agencyId }, async (tx) => {
+    if (ctx.clientId) {
+      const [c] = await tx.select({ name: clients.name, key: clients.logoKey }).from(clients).where(and(eq(clients.id, ctx.clientId), eq(clients.agencyId, ctx.agencyId)));
+      if (c) return { name: c.name, logoKey: c.key, logoUrl: null as string | null };
+    }
+    const [a] = await tx.select({ name: agencies.name, branding: agencies.branding }).from(agencies).where(eq(agencies.id, ctx.agencyId));
+    return { name: a?.branding.appName ?? a?.name ?? "ownlevel", logoKey: null as string | null, logoUrl: a?.branding.logoUrl ?? null };
+  });

@@ -36,6 +36,25 @@ export default function Settings() {
     setBooking(r.data); setBookingSaved(true);
   }
 
+  const [logo, setLogo] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  useEffect(() => { void api<{ url: string | null }>(`/api/clients/${client.id}/logo`).then((r) => r.ok && setLogo(r.data.url)); }, [client.id]);
+
+  async function uploadLogo(file: File) {
+    setLogoError(null);
+    const res = await fetch(`/api/clients/${client.id}/logo`, { method: "PUT", headers: { "content-type": file.type }, body: file });
+    const data = (await res.json().catch(() => ({}))) as { url?: string | null; message?: string };
+    if (!res.ok) return setLogoError(data.message ?? t("client.settings.logoFailed"));
+    setLogo(data.url ?? null);
+  }
+
+  async function removeLogo() {
+    setLogoError(null);
+    const r = await api<{ url: string | null }>(`/api/clients/${client.id}/logo`, { method: "DELETE" });
+    if (!r.ok) return setLogoError(r.error);
+    setLogo(null);
+  }
+
   async function patch(body: Record<string, unknown>) {
     setError(null); setSaved(false); setPending(true);
     const r = await api(`/api/clients/${client.id}`, { method: "PATCH", body });
@@ -63,6 +82,14 @@ export default function Settings() {
         {saved && <Alert variant="success">{t("common.saved")}</Alert>}
         <div><Button disabled={pending}>{t("common.save")}</Button></div>
       </form>
+      <h2>{t("client.settings.logoTitle")}</h2>
+      <p className="mb-3 text-sm text-muted-foreground">{t("client.settings.logoHelp")}</p>
+      <div className="flex items-center gap-3">
+        {logo && <img src={logo} alt="" height={48} className="h-12 w-auto rounded border" />}
+        <Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadLogo(f); e.target.value = ""; }} />
+        {logo && <Button type="button" variant="outline" onClick={removeLogo}>{t("client.settings.logoRemove")}</Button>}
+      </div>
+      {logoError && <Alert variant="destructive" className="mt-3">{logoError}</Alert>}
       {booking && (
         <>
           <h2>{t("client.settings.bookingTitle")}</h2>

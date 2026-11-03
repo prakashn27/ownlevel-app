@@ -7,6 +7,7 @@ import {
   bookPublic,
   cancelManagedBooking,
   getBookingSettings,
+  getClientLogoKey,
   getManagedBooking,
   getPublicCalendar,
   getPublicSlots,
@@ -54,6 +55,7 @@ import {
   session as sessionTable,
   sendEmail,
   updateBranding,
+  setClientLogoKey,
   updateClient,
   updateField,
   updateRecord,
@@ -265,6 +267,56 @@ app.get("/api/clients/:clientId", async (c) => {
 app.patch("/api/clients/:clientId", async (c) => {
   const { ctx } = await agencyCtx(c);
   return c.json(await updateClient(db, ctx, c.req.param("clientId"), await jsonBody(c)));
+});
+
+// Logo: stored in R2 at {agencyId}/{clientId}/logo-{timestamp}.{ext}; the MCP Worker serves it publicly.
+type LogoEnv = { LOGOS?: { put(k: string, v: ArrayBuffer, o: { httpMetadata: { contentType: string } }): Promise<unknown>; delete(k: string): Promise<void> } };
+const LOGO_TYPES: Record<string, { ext: string; magic: number[] }> = {
+  "image/png": { ext: "png", magic: [0x89, 0x50, 0x4e, 0x47] },
+  "image/jpeg": { ext: "jpg", magic: [0xff, 0xd8, 0xff] },
+  "image/webp": { ext: "webp", magic: [0x52, 0x49, 0x46, 0x46] },
+};
+const LOGO_MAX = 512 * 1024;
+const logoUrl = (key: string | null) => ({ url: key ? `${new URL(env.mcpUrl).origin}/logos/${key}` : null });
+const logoBucket = (c: Ctx) => {
+  const b = (c.env as LogoEnv | undefined)?.LOGOS;
+  if (!b) throw new DomainError("invalid_input", "Logo storage is not configured on this server.");
+  return b;
+};
+
+app.get("/api/clients/:clientId/logo", async (c) => {
+  const { ctx } = await agencyCtx(c);
+  return c.json(logoUrl(await getClientLogoKey(db, ctx, c.req.param("clientId"))));
+});
+
+app.put("/api/clients/:clientId/logo", async (c) => {
+  const { ctx } = await agencyCtx(c);
+  const bucket = logoBucket(c);
+  const type = LOGO_TYPES[(c.req.header("content-type") ?? "").split(";")[0]!.trim()];
+  if (!type) throw new DomainError("invalid_input", "The logo must be a PNG, JPEG or WebP image.");
+  const bytes = await c.req.arrayBuffer();
+  if (bytes.byteLength === 0 || bytes.byteLength > LOGO_MAX) throw new DomainError("invalid_input", "The logo must be at most 512 KB.");
+  const head = new Uint8Array(bytes, 0, Math.min(4, bytes.byteLength));
+  if (!type.magic.every((b, i) => head[i] === b)) throw new DomainError("invalid_input", "That file is not a valid image of the chosen type.");
+  const clientId = c.req.param("clientId");
+  const key = `${ctx.agencyId}/${clientId}/logo-${Date.now()}.${type.ext}`;
+  await bucket.put(key, bytes, { httpMetadata: { contentType: c.req.header("content-type")!.split(";")[0]!.trim() } });
+  let previous: string | null;
+  try {
+    previous = await setClientLogoKey(db, ctx, clientId, key); // role + tenant checks happen here
+  } catch (e) {
+    await bucket.delete(key);
+    throw e;
+  }
+  if (previous) await bucket.delete(previous);
+  return c.json(logoUrl(key));
+});
+
+app.delete("/api/clients/:clientId/logo", async (c) => {
+  const { ctx } = await agencyCtx(c);
+  const previous = await setClientLogoKey(db, ctx, c.req.param("clientId"), null);
+  if (previous) await logoBucket(c).delete(previous);
+  return c.json(logoUrl(null));
 });
 
 app.get("/api/clients/:clientId/team", async (c) => {

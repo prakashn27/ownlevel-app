@@ -63,6 +63,8 @@ export const clients = pgTable(
     slug: text("slug"),
     /** Master switch: visitors' AI assistants may check times and book through the public MCP endpoint. Off until the client opts in. */
     aiBooking: boolean("ai_booking").notNull().default(false),
+    /** Object key of the uploaded logo in the logos bucket ({agencyId}/{clientId}/logo-{timestamp}.{ext}); null = none. */
+    logoKey: text("logo_key"),
     settings: jsonb("settings").notNull().default({}),
     status: text("status").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

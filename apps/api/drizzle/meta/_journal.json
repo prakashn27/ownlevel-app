@@ -85,6 +85,13 @@
       "when": 1793388474504,
       "tag": "0011_ai_booking",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793737351047,
+      "tag": "0012_client_logo",
+      "breakpoints": true
     }
   ]
 }

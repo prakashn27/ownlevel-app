@@ -11,6 +11,10 @@
   // Then paste the returned id below. The role must NOT be superuser/BYPASSRLS.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "3f07738b696246ad83692a07daa88f14", "localConnectionString": "postgres://ownlevel:ownlevel@localhost:5432/ownlevel" }],
 
+  // Client logos. Written here, served publicly by the MCP Worker at /logos/... (shared bucket).
+  // Create with: wrangler r2 bucket create ownlevel-logos
+  "r2_buckets": [{ "binding": "LOGOS", "bucket_name": "ownlevel-logos" }],
+
   // Secrets (wrangler secret put): BETTER_AUTH_SECRET, PROXY_SHARED_SECRET, RESEND_API_KEY, TURNSTILE_SECRET
   "vars": {
     // The platform origin, not api.*: the OAuth authorization server for MCP must share the browser's session

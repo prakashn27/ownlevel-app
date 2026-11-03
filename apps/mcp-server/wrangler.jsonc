@@ -11,6 +11,10 @@
   // Same Hyperdrive config as the API. The role must NOT be superuser/BYPASSRLS.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "3f07738b696246ad83692a07daa88f14", "localConnectionString": "postgres://ownlevel:ownlevel@localhost:5432/ownlevel" }],
 
+  // Client logos, uploaded by the API and served publicly at /logos/{agencyId}/{clientId}/logo-{timestamp}.{ext}.
+  // Create with: wrangler r2 bucket create ownlevel-logos
+  "r2_buckets": [{ "binding": "LOGOS", "bucket_name": "ownlevel-logos" }],
+
   // No secrets: tokens are verified against public keys.
   "vars": {
     "MCP_PUBLIC_URL": "https://mcp.ownlevel.app/mcp",
@@ -38,6 +42,7 @@
   "env": {
     "preview": {
       "routes": [],
+      "r2_buckets": [{ "binding": "LOGOS", "bucket_name": "ownlevel-logos" }],
       "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "3f07738b696246ad83692a07daa88f14", "localConnectionString": "postgres://ownlevel:ownlevel@localhost:5432/ownlevel" }],
       "vars": {
         "MCP_PUBLIC_URL": "http://localhost:4100/mcp",

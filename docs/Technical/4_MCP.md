@@ -574,3 +574,14 @@ Both apps call the link from their own servers, so it must be public https (not 
 Suggested order from here: audit log and annotations on the staff tools, then the email confirmation and notifications TODO. Before launch, work through the "Not verified" lists in Production and Public booking.
 
 
+
+## Server icon (logo)
+
+The MCP server info carries `icons`, so assistants show a logo next to the connector.
+
+| Connection | Icon |
+|---|---|
+| Agency-level `/mcp` | Agency `branding.logoUrl` |
+| Client-level `/mcp` and public `/book/{agency}/{client}/mcp` | Client's uploaded logo |
+
+Client logos live in the R2 bucket `ownlevel-logos` (binding `LOGOS` on the API and MCP Workers) at `{agencyId}/{clientId}/logo-{timestamp}.{png|jpg|webp}`. The API writes them (`PUT`/`DELETE /api/clients/:id/logo`, owners and admins, PNG/JPEG/WebP up to 512 KB, SVG refused); the key is stored in `clients.logo_key`. The MCP Worker serves them publicly at `https://mcp.ownlevel.app/logos/{key}`. A new upload gets a new key, so URLs are immutable and cached for a year. Create the bucket with `wrangler r2 bucket create ownlevel-logos`.

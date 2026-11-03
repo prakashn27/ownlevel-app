@@ -2,7 +2,8 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { DomainError } from "@ownlevel/core";
+import { DomainError, getMcpIdentity } from "@ownlevel/core";
+import { serverIcons } from "./logos.js";
 import { findTool, visibleTools, type ToolContext } from "@ownlevel/ai/tools";
 
 export type McpDeps = {
@@ -30,7 +31,10 @@ export function createMcpHandler(deps: McpDeps) {
       });
     }
 
-    const server = new Server({ name: "ownlevel", version: "0.0.0" }, { capabilities: { tools: { listChanged: true } } });
+    // Client-level connections show the client's logo, agency-level ones the agency's.
+    const identity = await getMcpIdentity(ctx.db, { agencyId: ctx.agencyId, clientId: ctx.level === "client" ? ctx.clientId : undefined }).catch(() => null);
+    const icons = identity ? serverIcons(new URL(req.url).origin, identity) : undefined;
+    const server = new Server({ name: "ownlevel", version: "0.0.0", icons }, { capabilities: { tools: { listChanged: true } } });
 
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: visibleTools(ctx).map((t) => ({
