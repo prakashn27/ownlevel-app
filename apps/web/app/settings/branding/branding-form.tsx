@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,17 @@ export function BrandingForm({ agencyName, initial }: { agencyName: string; init
   const [pending, setPending] = useState(false);
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => { setSaved(false); setV({ ...v, [k]: e.target.value }); };
 
+  const fileInput = useRef<HTMLInputElement>(null);
+  async function uploadLogo(file: File) {
+    setError(null); setSaved(false);
+    const res = await fetch("/api/agency/branding/logo", { method: "PUT", headers: { "content-type": file.type }, body: file });
+    const data = (await res.json().catch(() => ({}))) as { url?: string; message?: string };
+    if (!res.ok || !data.url) return setError(data.message ?? t("branding.logoFailed"));
+    setV((p) => ({ ...p, logoUrl: data.url! }));
+    setSaved(true);
+    router.refresh();
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null); setPending(true);
@@ -41,7 +52,16 @@ export function BrandingForm({ agencyName, initial }: { agencyName: string; init
       <p className="-mt-2 mb-4 text-sm text-muted-foreground">{t("branding.intro")}</p>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <Label>{t("branding.appName")}<Input value={v.appName} onChange={set("appName")} placeholder={agencyName} maxLength={60} /></Label>
-        <Label>{t("branding.logoUrl")}<Input value={v.logoUrl} onChange={set("logoUrl")} placeholder="https://…/logo.png" /></Label>
+        <Label>
+          {t("branding.logoUrl")}
+          <span className="flex items-center gap-2">
+            <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadLogo(f); e.target.value = ""; }} />
+            <Button type="button" variant="outline" onClick={() => fileInput.current?.click()}>{t("branding.logoUpload")}</Button>
+            <span className="text-sm font-normal text-muted-foreground">{t("branding.logoOr")}</span>
+          </span>
+          <Input value={v.logoUrl} onChange={set("logoUrl")} placeholder="https://…/logo.png" />
+          <span className="text-xs font-normal text-muted-foreground">{t("branding.logoHelp")}</span>
+        </Label>
         <Label>
           {t("branding.primaryColor")}
           <span className="flex items-center gap-2">

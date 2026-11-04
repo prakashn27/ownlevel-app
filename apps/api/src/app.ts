@@ -55,6 +55,7 @@ import {
   session as sessionTable,
   sendEmail,
   updateBranding,
+  setBrandLogoUrl,
   setClientLogoKey,
   updateClient,
   updateField,
@@ -220,6 +221,32 @@ async function jsonBody(c: Ctx) {
 app.patch("/api/agency/branding", async (c) => {
   const { ctx } = await agencyCtx(c);
   return c.json(await updateBranding(db, ctx, await jsonBody(c)));
+});
+
+// Agency branding logo: same bucket, key {agencyId}/branding/logo-{timestamp}.{ext}; the URL is saved as branding.logoUrl.
+app.put("/api/agency/branding/logo", async (c) => {
+  const { ctx } = await agencyCtx(c);
+  const bucket = logoBucket(c);
+  const mime = (c.req.header("content-type") ?? "").split(";")[0]!.trim();
+  const type = LOGO_TYPES[mime];
+  if (!type) throw new DomainError("invalid_input", "The logo must be a PNG, JPEG or WebP image.");
+  const bytes = await c.req.arrayBuffer();
+  if (bytes.byteLength === 0 || bytes.byteLength > LOGO_MAX) throw new DomainError("invalid_input", "The logo must be at most 512 KB.");
+  const head = new Uint8Array(bytes, 0, Math.min(4, bytes.byteLength));
+  if (!type.magic.every((b, i) => head[i] === b)) throw new DomainError("invalid_input", "That file is not a valid image of the chosen type.");
+  const key = `${ctx.agencyId}/branding/logo-${Date.now()}.${type.ext}`;
+  const { url } = logoUrl(key);
+  await bucket.put(key, bytes, { httpMetadata: { contentType: mime } });
+  let previous: string | null;
+  try {
+    previous = await setBrandLogoUrl(db, ctx, url!); // role check happens here
+  } catch (e) {
+    await bucket.delete(key);
+    throw e;
+  }
+  const base = logoUrl("x").url!.slice(0, -1); // ".../logos/"
+  if (previous?.startsWith(`${base}${ctx.agencyId}/branding/`)) await bucket.delete(previous.slice(base.length));
+  return c.json({ url });
 });
 
 app.get("/api/team", async (c) => {

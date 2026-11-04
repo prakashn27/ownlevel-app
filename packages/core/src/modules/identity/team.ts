@@ -154,6 +154,17 @@ export async function updateBranding(db: Db, ctx: { userId: string; agencyId: st
   });
 }
 
+/** Set only the logo URL (an uploaded file's public URL); other branding fields are kept. Returns the previous URL so the caller can delete the old file. */
+export async function setBrandLogoUrl(db: Db, ctx: { userId: string; agencyId: string }, logoUrl: string) {
+  return withTenant(db, ctx, async (tx) => {
+    await requireRole(tx, ctx.userId, ctx.agencyId, ["agency_owner", "agency_admin"]);
+    const [row] = await tx.select({ branding: agencies.branding }).from(agencies).where(eq(agencies.id, ctx.agencyId));
+    if (!row) throw new DomainError("not_found", "Agency not found.");
+    await tx.update(agencies).set({ branding: { ...row.branding, logoUrl } }).where(eq(agencies.id, ctx.agencyId));
+    return row.branding.logoUrl ?? null;
+  });
+}
+
 /** Change only the primary color; other branding fields are kept (updateBranding replaces the whole object). */
 export async function updateBrandColor(db: Db, ctx: { userId: string; agencyId: string }, primaryColor: string) {
   const { primaryColor: color } = parseBranding({ primaryColor });
