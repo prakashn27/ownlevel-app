@@ -32,6 +32,9 @@ Read only the doc relevant to the task:
 ## Commits
 Always use [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, e.g. `feat(tenancy): add organizations RLS policies`.
 
+## Linear
+Create every issue in team `PN` (Pnat) and add it to the project **OwnLevel.app** (project id `0c3ee419-aa8e-40ac-b435-f4cc2237ed71`, https://linear.app/pnat/project/ownlevelapp-c08bd5545fcc). Always pass `projectId` when creating issues.
+
 ## Diagrams
 Always use Mermaid (fenced ```mermaid blocks) for diagrams: architecture, flows, sequences, ER models.
 

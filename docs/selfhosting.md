@@ -131,44 +131,6 @@ Run each process under a supervisor such as systemd or pm2 so they restart on fa
 
 > The reference production deployment targets Cloudflare Workers ([3_Deployment.md](./technical/3_Deployment.md)). The Node entry points above are what `pnpm dev` uses, and are the supported path for self-hosting.
 
-## 6. Reverse proxy and DNS
-
-DNS (all pointing at your server):
-
-| Record | Purpose |
-| --- | --- |
-| `app.example.com` | Platform app |
-| `*.example.com` | Agency workspaces (`{slug}.example.com`) |
-| `mcp.example.com` | MCP server |
-
-Wildcard TLS needs a DNS-01 challenge. Example Caddyfile (with your DNS provider's Caddy plugin):
-
-```caddy
-app.example.com, *.example.com {
-    tls { dns <provider> <token> }
-    reverse_proxy localhost:3100
-}
-
-mcp.example.com {
-    reverse_proxy localhost:4100
-}
-```
-
-Keep the API (`:4000`) private. Only the web app reaches it, through its same-origin proxy. Make sure the proxy passes the original `Host` header through unchanged.
-
-## 7. Verify
-
-- `https://app.example.com/signup` loads and you can create an agency
-- `https://{slug}.example.com/login` shows that agency's branding
-- An unknown slug returns "Not found"
-- `https://mcp.example.com/healthz` returns `ok`
-- An unauthenticated `POST https://mcp.example.com/mcp` returns `401` with a `WWW-Authenticate` header
-
-## Limitations of self-hosting
-
-- Agency **custom domains** rely on Cloudflare for SaaS in the cloud setup. Self-hosted, you must provision DNS and certificates for custom domains yourself.
-- Scheduled jobs (domain re-verification, session cleanup) run as Cron Triggers in the cloud. Self-hosted, run them from your own scheduler.
-- Without `RESEND_API_KEY`, emails (invites, password resets) are printed to the API console instead of sent.
 
 ## Upgrading
 
