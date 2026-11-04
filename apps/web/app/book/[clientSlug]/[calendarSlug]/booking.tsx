@@ -130,7 +130,6 @@ export function BookingPage({ clientSlug, calendarSlug, turnstileSiteKey }: { cl
         <div className="text-sm text-muted-foreground">{page.client_name}</div>
         <h1 className="m-0 text-xl">{page.name}</h1>
         <div className="text-sm text-muted-foreground">{t("minutes", { count: page.duration_min })}</div>
-        {page.hosts.length > 0 && <div className="text-sm">{t("with", { hosts: page.hosts.map((h) => h.name).join(", ") })}</div>}
         {page.capacity && <div className="text-sm">{t("classNote", { count: page.capacity })}</div>}
         {page.description && <p className="whitespace-pre-line text-sm">{page.description}</p>}
         <div className="text-xs text-muted-foreground">{t("timesShownIn", { timezone: tz })}</div>

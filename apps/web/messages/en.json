@@ -512,7 +512,6 @@
   "booking": {
     "loading": "Loading…",
     "notFound": "This booking page doesn't exist or isn't open.",
-    "with": "With {hosts}",
     "minutes": "{count} min",
     "seatsLeft": "{count, plural, one {# seat left} other {# seats left}}",
     "classNote": "Group session with up to {count} people.",
