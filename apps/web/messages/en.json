@@ -202,29 +202,7 @@
     "primaryColor": "Primary color",
     "clientLabelQuestion": "What do you call your clients?",
     "clientLabelPlaceholder": "Client (e.g. Account, Location)",
-    "preview": "Preview",
-    "domain": {
-      "title": "Use your own domain",
-      "intro": "Serve your portal and login page from your own address, such as app.youragency.com, instead of {host}.",
-      "beforeTitle": "Before you start",
-      "before1": "Pick a subdomain you control, such as app.youragency.com. Apex domains (youragency.com) are not supported.",
-      "before2": "You need access to the DNS settings of that domain, and you must be an agency owner or admin.",
-      "stepsTitle": "Steps",
-      "step1": "Add your subdomain in Ownlevel. We give you two DNS records.",
-      "step2": "Create both records at your DNS provider (Cloudflare, GoDaddy, Route 53, ...).",
-      "step3": "Verify the domain. DNS changes can take a few minutes to a few hours, and we re-check automatically.",
-      "step4": "When the status is Active, open the new address and check your branded login page.",
-      "step5": "Optionally make it the primary domain so invites and password-reset emails use it.",
-      "recordsTitle": "DNS records",
-      "recordType": "Type",
-      "recordName": "Name",
-      "recordValue": "Value",
-      "txtValue": "the verification token we show you",
-      "cloudflareNote": "If your domain is on Cloudflare, set the CNAME to DNS only (grey cloud) so the certificate can be issued.",
-      "afterTitle": "After it is live",
-      "after1": "Everyone signs in again on the new address. Sessions on {host} stay separate.",
-      "after2": "Keep both DNS records. If either is removed, the domain is marked Failed and your portal falls back to {host}."
-    }
+    "preview": "Preview"
   },
   "oauth": {
     "selectAgency": {
