@@ -19,6 +19,19 @@ const industries = (await getCollection("industries")).filter((i) => i.data.loca
     <a class="btn" href={`${appUrl}/signup`}>{t("hero.cta")}</a>
   </section>
   <section>
+    <h2>{t("demo.title")}</h2>
+    <div style="aspect-ratio:16/9;max-width:860px;border-radius:12px;overflow:hidden;border:1px solid var(--line)">
+      <iframe
+        src="https://www.youtube-nocookie.com/embed/olKSeHlA6Hw"
+        title={t("demo.iframeTitle")}
+        loading="lazy"
+        style="width:100%;height:100%;border:0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+      ></iframe>
+    </div>
+  </section>
+  <section style="margin-top:3rem">
     <h2>{t("features.title")}</h2>
     <div class="grid">
       {[1, 2, 3].map((n) => (
