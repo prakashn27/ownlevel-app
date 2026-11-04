@@ -467,6 +467,7 @@ Everything is **off by default**; nothing is exposed until the client opts in at
 | --- | --- | --- | --- |
 | Master: "Let visitors' AI assistants book" | Client settings > Booking page | `clients.ai_booking` | Agency owner, admin, client admin |
 | Per calendar: "Offer this calendar to AI assistants" | Calendar settings > AI assistants | `calendars.ai_booking` | Same (the `clientSettings` action) |
+| About your business (optional, max 2000 chars) | Client settings > Booking page | `clients.ai_description` | Same. Sent to the assistant as MCP server `instructions` and as `business_description` in `services_list`. |
 
 A calendar is reachable only if the client is active, the master switch is on, the calendar is **published** and its own switch is on. Anything else, including an unknown agency or client, is the same `404`, so nothing leaks. Turning the master switch off closes the whole endpoint at once (cancelling an existing booking still works through the emailed link).
 

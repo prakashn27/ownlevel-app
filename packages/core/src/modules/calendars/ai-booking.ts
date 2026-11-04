@@ -26,7 +26,7 @@ export async function resolveAiTarget(db: Db, agencySlug: string, clientSlug: st
   if (!agencyId) throw notFound();
   return withTenant(db, { agencyId }, async (tx) => {
     const [client] = await tx
-      .select({ id: clients.id, name: clients.name, slug: clients.slug, logoKey: clients.logoKey, logoUrl: clients.logoUrl })
+      .select({ id: clients.id, name: clients.name, slug: clients.slug, logoKey: clients.logoKey, logoUrl: clients.logoUrl, aiDescription: clients.aiDescription })
       .from(clients)
       .where(and(eq(clients.agencyId, agencyId), eq(clients.slug, clientSlug.toLowerCase()), eq(clients.status, "active"), eq(clients.aiBooking, true)));
     if (!client) throw notFound();
@@ -35,7 +35,7 @@ export async function resolveAiTarget(db: Db, agencySlug: string, clientSlug: st
       .from(calendars)
       .where(and(eq(calendars.clientId, client.id), eq(calendars.status, "published"), eq(calendars.aiBooking, true)))
       .orderBy(asc(calendars.name));
-    return { agencyId, client: { id: client.id, name: client.name, slug: client.slug!, logoKey: client.logoKey, logoUrl: client.logoUrl }, calendars: offered };
+    return { agencyId, client: { id: client.id, name: client.name, slug: client.slug!, logoKey: client.logoKey, logoUrl: client.logoUrl, description: client.aiDescription }, calendars: offered };
   });
 }
 export type AiTarget = Awaited<ReturnType<typeof resolveAiTarget>>;
@@ -48,6 +48,7 @@ function offered(t: AiTarget, slug: string) {
 
 export const aiServices = (t: AiTarget) => ({
   business: t.client.name,
+  ...(t.client.description ? { business_description: t.client.description } : {}),
   services: t.calendars.map((c) => ({ service: c.slug, name: c.name, description: c.description, duration_min: c.durationMin, timezone: c.timezone })),
 });
 

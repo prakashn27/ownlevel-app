@@ -21,7 +21,7 @@ export default function Settings() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
-  const [booking, setBooking] = useState<{ slug: string | null; country: string | null; agency_country: string; ai_booking: boolean; mcp_url: string | null } | null>(null);
+  const [booking, setBooking] = useState<{ slug: string | null; country: string | null; agency_country: string; ai_booking: boolean; ai_description: string | null; mcp_url: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSaved, setBookingSaved] = useState(false);
@@ -31,7 +31,7 @@ export default function Settings() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setBookingError(null); setBookingSaved(false);
-    const r = await api<NonNullable<typeof booking>>(`/api/clients/${client.id}/booking-settings`, { method: "PATCH", body: { slug: f.get("slug"), country: f.get("country") || null, ai_booking: f.get("ai_booking") === "on" } });
+    const r = await api<NonNullable<typeof booking>>(`/api/clients/${client.id}/booking-settings`, { method: "PATCH", body: { slug: f.get("slug"), country: f.get("country") || null, ai_booking: f.get("ai_booking") === "on", ai_description: String(f.get("ai_description") ?? "") } });
     if (!r.ok) return setBookingError(r.error);
     setBooking(r.data); setBookingSaved(true);
   }
@@ -118,6 +118,8 @@ export default function Settings() {
             <Label>{t("client.settings.country")}<CountrySelect name="country" defaultValue={booking.country ?? ""} emptyLabel={t("client.settings.useAgencyCountry", { country: booking.agency_country })} /></Label>
             <p className="-mt-2 text-xs text-muted-foreground">{t("client.settings.countryHelp")}</p>
             <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="ai_booking" defaultChecked={booking.ai_booking} className="mt-1" /><span><b>{t("client.settings.aiBooking")}</b><br /><span className="text-muted-foreground">{t("client.settings.aiBookingHelp")}</span></span></label>
+            <Label>{t("client.settings.aiDescription")}<textarea name="ai_description" defaultValue={booking.ai_description ?? ""} maxLength={2000} rows={5} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm" /></Label>
+            <p className="-mt-2 text-xs text-muted-foreground">{t("client.settings.aiDescriptionHelp")}</p>
             {booking.ai_booking && booking.mcp_url && (
               <div>
                 <div className="flex items-center gap-1"><Label>{t("client.settings.aiLink")}</Label><AiConnectHelp link={booking.mcp_url} /></div>
