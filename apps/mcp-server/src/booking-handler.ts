@@ -36,7 +36,7 @@ export function createBookingHandler(deps: { db: Db; limit?: BookingLimit }) {
     }
     const ctx = { db: deps.db, target };
 
-    const server = new Server({ name: target.client.name, version: "0.0.0", icons: serverIcons(new URL(req.url).origin, { logoKey: target.client.logoKey, logoUrl: null }) }, { capabilities: { tools: {} } });
+    const server = new Server({ name: target.client.name, version: "0.0.0", icons: serverIcons(new URL(req.url).origin, { logoKey: target.client.logoKey, logoUrl: target.client.logoUrl }) }, { capabilities: { tools: {} } });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: bookingTools.map((t) => ({ name: t.name, description: t.description, annotations: t.annotations, inputSchema: z.toJSONSchema(t.input) as { type: "object" } })),
     }));

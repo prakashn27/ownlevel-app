@@ -3,7 +3,7 @@ import { slugify } from "@ownlevel/tenancy";
 import { agencies, clients, memberships, roles, withTenant, type Db } from "../../db/index.js";
 import { DomainError } from "../../errors.js";
 import { RESERVED } from "../calendars/calendars.js";
-import { assertClient, requireRole } from "../identity/team.js";
+import { assertClient, parseBranding, requireRole } from "../identity/team.js";
 
 type Scope = { userId: string; agencyId: string };
 const ANY_AGENCY_ROLE = ["agency_owner", "agency_admin", "agency_user"];
@@ -116,31 +116,40 @@ export async function updateClient(db: Db, ctx: Scope, clientId: string, input: 
   });
 }
 
-/** Uploaded logo of a client (object key in the logos bucket, null = none). Same visibility as getClient. */
-export async function getClientLogoKey(db: Db, ctx: Scope, clientId: string) {
+/** Logo of a client: an uploaded file (object key in the logos bucket) or a pasted link; both null = none. Same visibility as getClient. */
+export async function getClientLogo(db: Db, ctx: Scope, clientId: string) {
   await getClient(db, ctx, clientId);
-  return withTenant(db, ctx, async (tx) => (await tx.select({ k: clients.logoKey }).from(clients).where(and(eq(clients.id, clientId), eq(clients.agencyId, ctx.agencyId)))).at(0)?.k ?? null);
+  return withTenant(db, ctx, async (tx) => {
+    const [r] = await tx.select({ key: clients.logoKey, url: clients.logoUrl }).from(clients).where(and(eq(clients.id, clientId), eq(clients.agencyId, ctx.agencyId)));
+    return { key: r?.key ?? null, url: r?.url ?? null };
+  });
 }
 
-/** Point the client at a new logo object (or null to remove). Returns the previous key so the caller can delete it. Owners and admins only. */
-export const setClientLogoKey = (db: Db, ctx: Scope, clientId: string, key: string | null) =>
+/** Set the client's logo to an uploaded object (or null to remove any logo, link included). Returns the previous key so the caller can delete it. Owners and admins only. */
+export const setClientLogoKey = (db: Db, ctx: Scope, clientId: string, key: string | null) => setClientLogo(db, ctx, clientId, { key, url: null });
+
+/** Set the client's logo to an http(s) link (null removes it). Any uploaded file is dropped; returns its key so the caller can delete it. */
+export const setClientLogoUrl = (db: Db, ctx: Scope, clientId: string, url: string | null) =>
+  setClientLogo(db, ctx, clientId, { key: null, url: url === null ? null : (parseBranding({ logoUrl: url }).logoUrl ?? null) });
+
+const setClientLogo = (db: Db, ctx: Scope, clientId: string, logo: { key: string | null; url: string | null }) =>
   withTenant(db, ctx, async (tx) => {
     await requireRole(tx, ctx.userId, ctx.agencyId, MANAGERS);
     await assertClient(tx, ctx.agencyId, clientId);
     const [prev] = await tx.select({ k: clients.logoKey }).from(clients).where(and(eq(clients.id, clientId), eq(clients.agencyId, ctx.agencyId)));
-    await tx.update(clients).set({ logoKey: key }).where(and(eq(clients.id, clientId), eq(clients.agencyId, ctx.agencyId)));
+    await tx.update(clients).set({ logoKey: logo.key, logoUrl: logo.url }).where(and(eq(clients.id, clientId), eq(clients.agencyId, ctx.agencyId)));
     return prev?.k ?? null;
   });
 
 /**
  * Who an MCP connection presents itself as. A client-level connection shows the client's uploaded logo (a key; the
- * caller turns it into a public URL), an agency-level one the agency's branding logo URL.
+ * caller turns it into a public URL) or pasted link, an agency-level one the agency's branding logo URL.
  */
 export const getMcpIdentity = (db: Db, ctx: { agencyId: string; clientId?: string }) =>
   withTenant(db, { agencyId: ctx.agencyId }, async (tx) => {
     if (ctx.clientId) {
-      const [c] = await tx.select({ name: clients.name, key: clients.logoKey }).from(clients).where(and(eq(clients.id, ctx.clientId), eq(clients.agencyId, ctx.agencyId)));
-      if (c) return { name: c.name, logoKey: c.key, logoUrl: null as string | null };
+      const [c] = await tx.select({ name: clients.name, key: clients.logoKey, url: clients.logoUrl }).from(clients).where(and(eq(clients.id, ctx.clientId), eq(clients.agencyId, ctx.agencyId)));
+      if (c) return { name: c.name, logoKey: c.key, logoUrl: c.url };
     }
     const [a] = await tx.select({ name: agencies.name, branding: agencies.branding }).from(agencies).where(eq(agencies.id, ctx.agencyId));
     return { name: a?.branding.appName ?? a?.name ?? "ownlevel", logoKey: null as string | null, logoUrl: a?.branding.logoUrl ?? null };

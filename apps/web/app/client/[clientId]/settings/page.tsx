@@ -38,8 +38,9 @@ export default function Settings() {
 
   const logoInput = useRef<HTMLInputElement>(null);
   const [logo, setLogo] = useState<string | null>(null);
+  const [logoLink, setLogoLink] = useState("");
   const [logoError, setLogoError] = useState<string | null>(null);
-  useEffect(() => { void api<{ url: string | null }>(`/api/clients/${client.id}/logo`).then((r) => r.ok && setLogo(r.data.url)); }, [client.id]);
+  useEffect(() => { void api<{ url: string | null; link: string | null }>(`/api/clients/${client.id}/logo`).then((r) => { if (r.ok) { setLogo(r.data.url); setLogoLink(r.data.link ?? ""); } }); }, [client.id]);
 
   async function uploadLogo(file: File) {
     setLogoError(null);
@@ -47,6 +48,15 @@ export default function Settings() {
     const data = (await res.json().catch(() => ({}))) as { url?: string | null; message?: string };
     if (!res.ok) return setLogoError(data.message ?? t("client.settings.logoFailed"));
     setLogo(data.url ?? null);
+    setLogoLink("");
+  }
+
+  async function saveLogoLink(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLogoError(null);
+    const r = await api<{ url: string }>(`/api/clients/${client.id}/logo`, { method: "PATCH", body: { url: logoLink } });
+    if (!r.ok) return setLogoError(r.error);
+    setLogo(r.data.url);
   }
 
   async function removeLogo() {
@@ -54,6 +64,7 @@ export default function Settings() {
     const r = await api<{ url: string | null }>(`/api/clients/${client.id}/logo`, { method: "DELETE" });
     if (!r.ok) return setLogoError(r.error);
     setLogo(null);
+    setLogoLink("");
   }
 
   async function patch(body: Record<string, unknown>) {
@@ -91,6 +102,11 @@ export default function Settings() {
         <Button type="button" variant="outline" onClick={() => logoInput.current?.click()}>{logo ? t("client.settings.logoReplace") : t("client.settings.logoUpload")}</Button>
         {logo && <Button type="button" variant="outline" onClick={removeLogo}>{t("client.settings.logoRemove")}</Button>}
       </div>
+      <form onSubmit={saveLogoLink} className="mt-3 flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">{t("client.settings.logoOr")}</span>
+        <Input value={logoLink} onChange={(e) => setLogoLink(e.target.value)} placeholder="https://…/logo.png" aria-label={t("client.settings.logoUrl")} className="max-w-sm" />
+        <Button variant="outline" disabled={!logoLink.trim()}>{t("client.settings.logoLinkSave")}</Button>
+      </form>
       {logoError && <Alert variant="destructive" className="mt-3">{logoError}</Alert>}
       {booking && (
         <>

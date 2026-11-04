@@ -65,6 +65,8 @@ export const clients = pgTable(
     aiBooking: boolean("ai_booking").notNull().default(false),
     /** Object key of the uploaded logo in the logos bucket ({agencyId}/{clientId}/logo-{timestamp}.{ext}); null = none. */
     logoKey: text("logo_key"),
+    /** External https logo link pasted by the agency; used when there is no uploaded logo (logoKey is cleared when this is set). */
+    logoUrl: text("logo_url"),
     settings: jsonb("settings").notNull().default({}),
     status: text("status").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

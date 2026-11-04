@@ -7,7 +7,7 @@ import {
   bookPublic,
   cancelManagedBooking,
   getBookingSettings,
-  getClientLogoKey,
+  getClientLogo,
   getManagedBooking,
   getPublicCalendar,
   getPublicSlots,
@@ -57,6 +57,7 @@ import {
   updateBranding,
   setBrandLogoUrl,
   setClientLogoKey,
+  setClientLogoUrl,
   updateClient,
   updateField,
   updateRecord,
@@ -313,7 +314,18 @@ const logoBucket = (c: Ctx) => {
 
 app.get("/api/clients/:clientId/logo", async (c) => {
   const { ctx } = await agencyCtx(c);
-  return c.json(logoUrl(await getClientLogoKey(db, ctx, c.req.param("clientId"))));
+  const { key, url } = await getClientLogo(db, ctx, c.req.param("clientId"));
+  return c.json({ url: key ? logoUrl(key).url : url, link: url });
+});
+
+// Logo as a pasted link instead of an upload; replaces (and deletes) any uploaded file.
+app.patch("/api/clients/:clientId/logo", async (c) => {
+  const { ctx } = await agencyCtx(c);
+  const { url } = await jsonBody(c);
+  if (typeof url !== "string" || !url.trim()) throw new DomainError("invalid_input", "Enter a logo URL.");
+  const previous = await setClientLogoUrl(db, ctx, c.req.param("clientId"), url);
+  if (previous) await logoBucket(c).delete(previous);
+  return c.json({ url: url.trim(), link: url.trim() });
 });
 
 app.put("/api/clients/:clientId/logo", async (c) => {
@@ -336,14 +348,14 @@ app.put("/api/clients/:clientId/logo", async (c) => {
     throw e;
   }
   if (previous) await bucket.delete(previous);
-  return c.json(logoUrl(key));
+  return c.json({ url: logoUrl(key).url, link: null });
 });
 
 app.delete("/api/clients/:clientId/logo", async (c) => {
   const { ctx } = await agencyCtx(c);
   const previous = await setClientLogoKey(db, ctx, c.req.param("clientId"), null);
   if (previous) await logoBucket(c).delete(previous);
-  return c.json(logoUrl(null));
+  return c.json({ url: null, link: null });
 });
 
 app.get("/api/clients/:clientId/team", async (c) => {
