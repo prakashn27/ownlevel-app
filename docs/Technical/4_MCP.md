@@ -467,7 +467,17 @@ Everything is **off by default**; nothing is exposed until the client opts in at
 | --- | --- | --- | --- |
 | Master: "Let visitors' AI assistants book" | Client settings > Booking page | `clients.ai_booking` | Agency owner, admin, client admin |
 | Per calendar: "Offer this calendar to AI assistants" | Calendar settings > AI assistants | `calendars.ai_booking` | Same (the `clientSettings` action) |
-| About your business (optional, max 2000 chars) | Client settings > Booking page | `clients.ai_description` | Same. Sent to the assistant as MCP server `instructions` and as `business_description` in `services_list`. |
+
+**Business description.** Beyond the switches, the client can write a short "About your business" text (Client settings > Booking page, same roles as above). It is the one place where the client tells assistants what it does and what to know before booking (location, services, cancellation policy).
+
+| Item | Detail |
+| --- | --- |
+| Column | `clients.ai_description`, nullable text (migration `0014`) |
+| Limit | 2000 characters, checked in `updateBookingSettings` (`AI_DESCRIPTION_MAX`), trimmed; empty is stored as null |
+| Sent as | MCP server `instructions` (in `booking-handler.ts`) and `business_description` in `services_list`. Both are used because some assistants ignore `instructions`. Omitted when empty. |
+| Visibility | Public: anyone with the link's assistant can read it. Never put private data in it. |
+
+The text is written by the client and goes straight into the assistant's context, so treat it as untrusted input (prompt injection). The risk is low here: the endpoint is public and exposes no private data.
 
 A calendar is reachable only if the client is active, the master switch is on, the calendar is **published** and its own switch is on. Anything else, including an unknown agency or client, is the same `404`, so nothing leaks. Turning the master switch off closes the whole endpoint at once (cancelling an existing booking still works through the emailed link).
 
@@ -475,7 +485,7 @@ A calendar is reachable only if the client is active, the master switch is on, t
 
 | Tool | Does |
 | --- | --- |
-| `services_list` | The offered calendars: id, name, description, duration, timezone |
+| `services_list` | The business name, its `business_description` (if set), and the offered calendars: id, name, description, duration, timezone |
 | `service_details` | What booking needs (email, phone or either) and the client's form questions |
 | `slots_find` | Free start times on local days (`date`, `days` up to 7), in the calendar's timezone |
 | `appointment_book` | Books with the visitor's name and email or phone, same validation, contact matching and double-booking protection as the public form. Returns a `manage_token` |
