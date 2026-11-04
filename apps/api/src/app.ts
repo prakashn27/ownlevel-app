@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import {
   DomainError,
   acceptInvitation,
+  activeCustomDomain,
   addHost,
   bookPublic,
   cancelManagedBooking,
@@ -260,7 +261,10 @@ async function sendInvite(c: Ctx, clientId?: string) {
   const body = await jsonBody(c);
   const inv = await createInvitation(db, ctx, { email: String(body.email ?? ""), roleKey: String(body.role ?? ""), clientId });
   const appName = resolved.branding.appName ?? resolved.name;
-  const url = `${requestHost(c.req.raw.headers).origin}/accept-invite?token=${inv.token}`;
+  // Prefer the agency's active custom domain over the host the admin happens to be on.
+  const custom = await activeCustomDomain(db, ctx.agencyId);
+  const origin = custom ? `https://${custom}` : requestHost(c.req.raw.headers).origin;
+  const url = `${origin}/accept-invite?token=${inv.token}`;
   const mail = inviteEmail({ appName, inviterName: user.name, roleName: inv.roleName, url });
   try {
     await sendEmail(db, transport, { agencyId: ctx.agencyId }, { from: fromAddress(appName), to: inv.email, ...mail });

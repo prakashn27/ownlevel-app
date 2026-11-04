@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { parseHost, type HostConfig } from "@ownlevel/tenancy";
 import { agencies, agencyDomains, withTenant, type Branding, type Db } from "../../db/index.js";
 
@@ -25,6 +25,18 @@ export async function resolveHost(db: Db, rawHost: string, cfg: HostConfig): Pro
     .where(and(eq(agencyDomains.hostname, parsed.host), eq(agencyDomains.status, "active"))));
   if (!row || row.status !== "active") return null;
   return { kind: "agency", agencyId: row.agencyId, name: row.name, slug: row.slug, branding: row.branding, hostname: parsed.host };
+}
+
+/** The agency's active custom domain (primary first, then oldest), for links in emails; null when it has none. */
+export async function activeCustomDomain(db: Db, agencyId: string): Promise<string | null> {
+  const [row] = await withTenant(db, { agencyId }, (tx) =>
+    tx
+      .select({ hostname: agencyDomains.hostname })
+      .from(agencyDomains)
+      .where(and(eq(agencyDomains.agencyId, agencyId), eq(agencyDomains.kind, "custom"), eq(agencyDomains.status, "active")))
+      .orderBy(desc(agencyDomains.isPrimary), asc(agencyDomains.createdAt))
+      .limit(1));
+  return row?.hostname ?? null;
 }
 
 /** True when the edge/auth layer may treat this origin host as ours (used for CSRF/origin checks). */

@@ -8,7 +8,9 @@ import { isFaviconHost } from "../lib/favicon";
 export async function generateMetadata() {
   const info = await getHostInfo();
   const t = await getTranslations("meta");
-  const title = info.kind === "agency" ? (info.branding.appName ?? info.name) : t("defaultTitle");
+  // Unknown hosts (e.g. a custom domain not yet active) must not show the Ownlevel brand.
+  const title =
+    info.kind === "agency" ? (info.branding.appName ?? info.name) : info.kind === "platform" ? t("defaultTitle") : t("notFound");
   // Only app.ownlevel.app gets a favicon; other hosts explicitly get none.
   const icons = (await isFaviconHost())
     ? [
@@ -29,14 +31,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     : undefined) as CSSProperties | undefined;
   return (
     <html lang={locale}>
-      <body style={style} className={info.kind === "agency" ? undefined : "theme-ownlevel"}>
+      <body style={style} className={info.kind === "platform" ? "theme-ownlevel" : undefined}>
         {info.kind === "agency" && (
           <header className="flex items-center gap-2 border-b bg-card px-5 py-3">
             {info.branding.logoUrl && <img src={info.branding.logoUrl} alt="" height={28} className="h-7 w-auto" />}
             <strong className="font-semibold">{info.branding.appName ?? info.name}</strong>
           </header>
         )}
-        {info.kind !== "agency" && (
+        {info.kind === "platform" && (
           <header className="flex items-center gap-2 border-b bg-card px-5 py-3">
             <img src="/logo.png" alt="" width={28} height={28} className="size-7" />
             <strong className="font-semibold">{t("defaultTitle")}</strong>

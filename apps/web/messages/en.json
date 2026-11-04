@@ -18,7 +18,8 @@
     "defaultClientLabel": "Client"
   },
   "meta": {
-    "defaultTitle": "Ownlevel"
+    "defaultTitle": "Ownlevel",
+    "notFound": "Not found"
   },
   "timezone": {
     "select": "Select timezone",

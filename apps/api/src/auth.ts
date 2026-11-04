@@ -5,6 +5,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { mcp } from "@better-auth/mcp";
 import { cimd } from "@better-auth/cimd";
 import {
+  activeCustomDomain,
   hasAgencyMembership,
   hasPendingInvitation,
   isKnownHost,
@@ -60,7 +61,10 @@ async function sendReset(userId: string, to: string, token: string, request: Req
     return console.warn(`reset email skipped: user has no membership or invitation on ${url.host}`);
   }
   const appName = resolved.kind === "agency" ? (resolved.branding.appName ?? resolved.name) : "Ownlevel";
-  const mail = resetPasswordEmail({ appName, url: `${url.origin}/reset-password?token=${token}` });
+  // Agencies with an active custom domain get links on that domain, whichever host the request came from.
+  const custom = resolved.kind === "agency" ? await activeCustomDomain(db, resolved.agencyId) : null;
+  const origin = custom ? `https://${custom}` : url.origin;
+  const mail = resetPasswordEmail({ appName, url: `${origin}/reset-password?token=${token}` });
   const msg = { from: fromAddress(appName), to, ...mail };
   if (resolved.kind === "agency") await sendEmail(db, transport, { agencyId: resolved.agencyId }, msg);
   else await transport(msg);
