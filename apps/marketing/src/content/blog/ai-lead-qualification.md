@@ -14,7 +14,7 @@ AI lead qualification is the step between a lead showing up and a human deciding
 
 Picture a small HVAC company that gets forty inbound messages a week: furnace quotes, warranty questions, a wrong number here and there, and the occasional homeowner ready to book same day. A dispatcher manually sorting that pile spends real time just figuring out which five are worth calling back first. AI lead qualification does that sorting the instant each message lands, so the same-day furnace quote gets flagged ahead of the warranty question, and the wrong number never reaches a human at all.
 
-It is not the same thing as a chatbot that just answers questions, and it is not the same as a spam filter either. A chatbot's job ends once it replies. A qualification system's job is to make a judgment call, hot, warm or cold, and route accordingly, which means it is doing something closer to what a good front-desk person already does by instinct, just applied to every single lead instead of whichever ones a busy human happens to notice first.
+It is not the same thing as [a chatbot that just answers questions](/blog/ai-agent-vs-chatbot), and it is not the same as a spam filter either. A chatbot's job ends once it replies. A qualification system's job is to make a judgment call, hot, warm or cold, and route accordingly, which means it is doing something closer to what a good front-desk person already does by instinct, just applied to every single lead instead of whichever ones a busy human happens to notice first.
 
 ## How Does AI Lead Qualification Actually Work?
 
